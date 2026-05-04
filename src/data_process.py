@@ -1,47 +1,87 @@
 import pandas as pd
+from pathlib import Path
 
-directory = [
-    "data/raw/cnews.test.txt",
-    "data/raw/cnews.train.txt",
-    "data/raw/cnews.val.txt"
-]
 
-target_directory = [
-    "data/processed/test_data.csv",
-    "data/processed/train_data.csv",
-    "data/processed/val_data.csv"
-]
+def process_raw_to_csv():
+    current_script_dir = Path(__file__).resolve().parent
+    base_path = current_script_dir.parent
 
-for source, target in zip(directory,target_directory):
+    source_files = [
+        base_path / "data" / "raw" / "cnews.test.txt",
+        base_path / "data" / "raw" / "cnews.train.txt",
+        base_path / "data" / "raw" / "cnews.val.txt"
+    ]
 
-    txt_path = source
+    target_files = [
+        base_path / "data" / "processed" / "test_data.csv",
+        base_path / "data" / "processed" / "train_data.csv",
+        base_path / "data" / "processed" / "val_data.csv"
+    ]
 
-    texts = []
-    labels = []
+    for source, target in zip(source_files, target_files):
+        texts = []
+        labels = []
 
-    with open(txt_path, "r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
+        with open(source, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if len(line) == 0:
+                    continue
 
-            if len(line) == 0:
-                continue
+                parts = line.split("\t")
+                if len(parts) != 2:
+                    continue
 
-            parts = line.split("\t")
+                label, text = parts
+                labels.append(label)
+                texts.append(text)
 
-            if len(parts) != 2:
-                continue
+        df = pd.DataFrame({
+            "text": texts,
+            "label": labels
+        })
 
-            label, text = parts
+        df.to_csv(target, index=False, encoding="utf-8-sig")
+        print(df.head())
+        print(df["label"].value_counts())
 
-            labels.append(label)
-            texts.append(text)
 
-    df = pd.DataFrame({
-        "text": texts,
-        "label": labels
-    })
+def data_processor():
+    current_script_dir = Path(__file__).resolve().parent
+    base_path = current_script_dir.parent / "data" / "processed"
 
-    df.to_csv(target, index=False, encoding="utf-8-sig")
+    test_path = base_path / "test_data.csv"
+    train_path = base_path / "train_data.csv"
+    val_path = base_path / "val_data.csv"
 
-    print(df.head())
-    print(df["label"].value_counts())
+    test_data = pd.read_csv(test_path)
+    train_data = pd.read_csv(train_path)
+    val_data = pd.read_csv(val_path)
+
+    return train_data,test_data, val_data
+
+
+def build_id_map(labels):
+    label2id = {
+        "体育": 0,
+        "财经": 1,
+        "娱乐": 2,
+        "家居": 3,
+        "房产": 4,
+        "教育": 5,
+        "时尚": 6,
+        "时政": 7,
+        "游戏": 8,
+        "科技": 9
+    }
+
+    ids = []
+    for label in labels:
+        label_id = label2id[label]
+        ids.append(label_id)
+
+    return ids
+
+
+if __name__ == "__main__":
+    process_raw_to_csv()

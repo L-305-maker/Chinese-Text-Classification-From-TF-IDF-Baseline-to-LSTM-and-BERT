@@ -1,0 +1,9 @@
+{
+    "TF_IDF__max_features": 10000,
+    "TF_IDF__ngram_range": [
+        1,
+        3
+    ],
+    "lg__C": 10,
+    "lg__max_iter": 10000
+}

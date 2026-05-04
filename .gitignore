@@ -1,9 +1,23 @@
+# large datasets
+data/raw/
+data/processed/
+
+# model checkpoints
+*.pt
+*.pth
+*.ckpt
+*.bin
+
+# cache
 __pycache__/
 *.pyc
-.ipynb_checkpoints/
+
+# virtual environment
 .venv/
 venv/
-.env
+
+# logs
+logs/
+
+# system files
 .DS_Store
-.vscode/
-.idea/

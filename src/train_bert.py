@@ -3,6 +3,7 @@ import torch.nn as nn
 from sklearn.metrics import f1_score
 from torch.optim import AdamW
 from transformers import BertModel
+import argparse
 
 from datasets_bert import process_loader_bert
 from model_utils import (
@@ -188,17 +189,29 @@ def test_model(model, test_loader, criterion, device):
         "test_macro_f1": test_f1,
     }
 
+def args_bert_parse(args=None):
+    parser = argparse.ArgumentParser(description="BERT model train")
+    parser.add_argument("--dropout",type=float,default=0.3)
+    parser.add_argument("--max_len",type=int,default=256)
+    parser.add_argument("--batch_size",type=int,default=16)
+    parser.add_argument("--learning_rate",type=float,default=2e-5)
+    parser.add_argument("--epochs",type=int,default=5)
 
-def main():
+    return parser.parse_args(args)
+
+
+def main(args=None):
+    args = args_bert_parse(args)
+
     config = {
         "model_name": MODEL_NAME,
         "pretrained_model": "bert-base-chinese",
         "num_classes": 10,
         "dropout": 0.3,
-        "max_len": 128,
-        "batch_size": 16,
-        "learning_rate": 2e-5,
-        "epochs": 5,
+        "max_len": args.max_len,
+        "batch_size": args.batch_size,
+        "learning_rate": args.learning_rate,
+        "epochs": args.epochs,
         "optimizer": "AdamW",
         "criterion": "CrossEntropyLoss",
         "save_model": "models/bert/best_model.pth",

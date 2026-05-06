@@ -8,8 +8,8 @@ from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
 
-from data_process import build_id_map, data_processor
-from model_utils import (
+from src.data_process import build_id_map, data_processor
+from src.model_utils import (
     MODELS_DIR,
     PARAMETERS_DIR,
     LABEL2ID,
@@ -179,12 +179,16 @@ def train(sample_size=None, small_grid=False):
     return metrics
 
 
-def main():
-    parser = argparse.ArgumentParser()
+def parse_lr_args(args=None):
+    parser = argparse.ArgumentParser(description="Train TF-IDF + Logistic Regression")
     parser.add_argument("--sample-size", type=int, default=None)
     parser.add_argument("--small-grid", action="store_true")
     parser.add_argument("--check-data", action="store_true")
-    args = parser.parse_args()
+    return parser.parse_args(args)
+
+
+def main(args=None):
+    args = parse_lr_args(args)
 
     if args.check_data:
         validate_data()

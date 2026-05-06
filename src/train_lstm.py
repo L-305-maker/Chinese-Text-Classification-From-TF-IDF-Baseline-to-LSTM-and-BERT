@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from sklearn.metrics import f1_score
 from torch.nn.utils.rnn import pack_padded_sequence
+import argparse
 
 from datasets_lstm import process_loader
 from model_utils import (
@@ -215,19 +216,32 @@ def train_model(
     save_history(MODEL_NAME, perf)
     return perf
 
+def parse_lstm_args(args=None):
+    parser = argparse.ArgumentParser(description="LSTM model train")
+    parser.add_argument("--embed_dim",type=int,default=64)
+    parser.add_argument("--hidden_size",type=int,default=512)
+    parser.add_argument("--num_layers",type=int,default=1)
+    parser.add_argument("--dropout",type=float,default=0.3)
+    parser.add_argument("--batch_size",type=int,default=16)
+    parser.add_argument("--learning_rate",type=float,default=0.001)
+    parser.add_argument("--epochs",type=int,defaule=5)
 
-def main():
+    return parser.parse_args(args)
+
+
+def main(args=None):
+    args = parse_lstm_args(args)
     config = {
         "model_name": MODEL_NAME,
         "num_classes": 10,
-        "embed_dim": 64,
-        "hidden_dim": 512,
-        "num_layers": 1,
-        "dropout": 0.3,
+        "embed_dim": args.embed_dim,
+        "hidden_dim": args.hidden_size,
+        "num_layers": args.num_layers,
+        "dropout": args.dropout,
         "bidirectional": False,
-        "batch_size": 16,
-        "learning_rate": 0.001,
-        "epochs": 10,
+        "batch_size": args.batch_size,
+        "learning_rate": args.learning_rate,
+        "epochs": args.epochs,
         "optimizer": "Adam",
         "criterion": "CrossEntropyLoss",
         "save_model": "models/lstm/best_model.pth",

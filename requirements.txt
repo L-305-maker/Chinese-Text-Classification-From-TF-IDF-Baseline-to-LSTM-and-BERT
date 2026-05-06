@@ -1,0 +1,8 @@
+jieba
+joblib
+matplotlib
+numpy
+pandas
+scikit-learn
+torch
+transformers

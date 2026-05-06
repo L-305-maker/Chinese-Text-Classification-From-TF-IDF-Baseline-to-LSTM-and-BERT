@@ -1,0 +1,15 @@
+{
+    "model_name": "bert",
+    "pretrained_model": "bert-base-chinese",
+    "num_classes": 10,
+    "dropout": 0.3,
+    "max_len": 128,
+    "batch_size": 16,
+    "learning_rate": 2e-05,
+    "epochs": 5,
+    "optimizer": "AdamW",
+    "criterion": "CrossEntropyLoss",
+    "save_model": "models/bert/best_model.pth",
+    "tokenizer_dir": "D:\\python\\Chinese Text Classification From TF-IDF Baseline to LSTM and BERT\\models\\bert\\tokenizer",
+    "saved_at": "2026-05-06T08:15:12"
+}

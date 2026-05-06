@@ -1,7 +1,5 @@
 from torch.utils.data import Dataset,DataLoader
-import torch.nn as nn
 import torch
-import pandas as pd
 import jieba
 from collections import Counter
 from data_process import data_processor,build_id_map
@@ -26,7 +24,7 @@ def build_vocab(text):
     return vocab
 
 def vocab_transmission():
-    train_data,test_data,val_data = data_processor()
+    train_data,_,_ = data_processor()
     vocab = build_vocab(train_data["text"])
     return vocab
 
@@ -66,7 +64,7 @@ def collate_fn(batch):
 
 class LSTMdataset(Dataset):
     def __init__(self,data,vocab):
-        self.text = data["text"]
+        self.text = data["text"].tolist()
         self.label = build_id_map(data["label"])
         self.vocab = vocab
 
@@ -80,8 +78,8 @@ class LSTMdataset(Dataset):
         return ids, label
 
 
-def process_loader():
-    train_data ,test_data,val_data = data_processor()
+def process_loader(batch_size=16):
+    train_data,val_data,test_data = data_processor()
 
     vocab = build_vocab(train_data["text"])
     
@@ -89,8 +87,8 @@ def process_loader():
     test_dataset = LSTMdataset(test_data,vocab)
     val_dataset = LSTMdataset(val_data,vocab)
 
-    train_loader = DataLoader(train_dataset,shuffle=True,batch_size=16,collate_fn=collate_fn)
-    test_loader = DataLoader(test_dataset,shuffle=False,batch_size=16,collate_fn=collate_fn)
-    val_loader = DataLoader(val_dataset,shuffle=False,batch_size=16,collate_fn=collate_fn)
+    train_loader = DataLoader(train_dataset,shuffle=True,batch_size=batch_size,collate_fn=collate_fn)
+    test_loader = DataLoader(test_dataset,shuffle=False,batch_size=batch_size,collate_fn=collate_fn)
+    val_loader = DataLoader(val_dataset,shuffle=False,batch_size=batch_size,collate_fn=collate_fn)
 
-    return train_loader,test_loader,val_loader
+    return train_loader,val_loader,test_loader,vocab

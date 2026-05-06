@@ -1,6 +1,8 @@
 import pandas as pd
 from pathlib import Path
 
+from model_utils import LABEL2ID
+
 
 def process_raw_to_csv():
     current_script_dir = Path(__file__).resolve().parent
@@ -41,6 +43,7 @@ def process_raw_to_csv():
             "label": labels
         })
 
+        target.parent.mkdir(parents=True, exist_ok=True)
         df.to_csv(target, index=False, encoding="utf-8-sig")
         print(df.head())
         print(df["label"].value_counts())
@@ -58,26 +61,16 @@ def data_processor():
     train_data = pd.read_csv(train_path)
     val_data = pd.read_csv(val_path)
 
-    return train_data,test_data, val_data
+    return train_data, val_data, test_data
 
 
 def build_id_map(labels):
-    label2id = {
-        "体育": 0,
-        "财经": 1,
-        "娱乐": 2,
-        "家居": 3,
-        "房产": 4,
-        "教育": 5,
-        "时尚": 6,
-        "时政": 7,
-        "游戏": 8,
-        "科技": 9
-    }
-
     ids = []
     for label in labels:
-        label_id = label2id[label]
+        if label not in LABEL2ID:
+            expected = ", ".join(LABEL2ID.keys())
+            raise KeyError(f"Unknown label {label!r}. Expected one of: {expected}")
+        label_id = LABEL2ID[label]
         ids.append(label_id)
 
     return ids

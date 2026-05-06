@@ -8,7 +8,7 @@ parameters/lstm/vocab.json
 *.pt
 *.ckpt
 *.bin
-
+.pth
 # cache
 __pycache__/
 *.pyc

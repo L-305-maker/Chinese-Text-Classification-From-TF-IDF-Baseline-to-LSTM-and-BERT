@@ -224,7 +224,7 @@ def parse_lstm_args(args=None):
     parser.add_argument("--dropout",type=float,default=0.3)
     parser.add_argument("--batch_size",type=int,default=16)
     parser.add_argument("--learning_rate",type=float,default=0.001)
-    parser.add_argument("--epochs",type=int,defaule=5)
+    parser.add_argument("--epochs",type=int,default=5)
 
     return parser.parse_args(args)
 

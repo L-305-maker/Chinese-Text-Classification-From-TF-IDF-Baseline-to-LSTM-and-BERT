@@ -5,7 +5,6 @@ data/processed/
 .idea
 # model checkpoints
 *.pt
-*.pth
 *.ckpt
 *.bin
 

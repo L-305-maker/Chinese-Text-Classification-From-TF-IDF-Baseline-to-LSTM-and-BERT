@@ -1,7 +1,8 @@
 # large datasets
 data/raw/
 data/processed/
-
+.vscode
+.idea
 # model checkpoints
 *.pt
 *.pth

@@ -28,13 +28,13 @@
 ## 项目结构
 ```text
 Chinese Text Classification From TF-IDF Baseline to LSTM and BERT/
-├─ data/
+├─ data/  #由于文件过大，该文件夹并未上传
 │  ├─ raw
 │  ├─ processed
 ├─ models/
-│  ├─ best_bert.pth
-│  ├─ best_lstm.pth
-│  ├─ log_tfidf_model.pkl
+│  ├─ bert/
+│  ├─ lstm/
+│  ├─ lr_tfidf/
 ├─ notebooks
 ├─ outputs/
 ├─ src/
@@ -46,9 +46,11 @@ Chinese Text Classification From TF-IDF Baseline to LSTM and BERT/
 │  ├─ train_bert.py
 │  ├─ train_lstm.py
 │  ├─ predict.py
+│  ├─ model_utils.py
 ├─ parameters/
-│  ├─ best_config.json
-│  ├─ best_lg_params.json
+│  ├─ bert/
+│  ├─ lr_tfidf/
+│  ├─ lstm/
 ├─ requirements.txt
 ├─ README.md
 ├─ main.py

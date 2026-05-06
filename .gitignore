@@ -3,6 +3,7 @@ data/raw/
 data/processed/
 .vscode
 .idea
+parameters/lstm/vocab.json
 # model checkpoints
 *.pt
 *.ckpt

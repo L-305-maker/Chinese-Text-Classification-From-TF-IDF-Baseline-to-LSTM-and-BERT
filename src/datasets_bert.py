@@ -4,7 +4,10 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from transformers import BertTokenizer
 
-from data_process import build_id_map
+try:
+    from src.data_process import build_id_map
+except ModuleNotFoundError:
+    from data_process import build_id_map
 
 
 def load_bert_data():

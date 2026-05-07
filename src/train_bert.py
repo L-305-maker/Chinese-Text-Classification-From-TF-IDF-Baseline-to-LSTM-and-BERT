@@ -5,16 +5,28 @@ from torch.optim import AdamW
 from transformers import BertModel
 import argparse
 
-from datasets_bert import process_loader_bert
-from model_utils import (
-    model_dir,
-    parameter_dir,
-    save_config,
-    save_history,
-    save_label_map,
-    save_metrics,
-    save_torch_checkpoint,
-)
+try:
+    from src.datasets_bert import process_loader_bert
+    from src.model_utils import (
+        model_dir,
+        parameter_dir,
+        save_config,
+        save_history,
+        save_label_map,
+        save_metrics,
+        save_torch_checkpoint,
+    )
+except ModuleNotFoundError:
+    from datasets_bert import process_loader_bert
+    from model_utils import (
+        model_dir,
+        parameter_dir,
+        save_config,
+        save_history,
+        save_label_map,
+        save_metrics,
+        save_torch_checkpoint,
+    )
 
 
 MODEL_NAME = "bert"

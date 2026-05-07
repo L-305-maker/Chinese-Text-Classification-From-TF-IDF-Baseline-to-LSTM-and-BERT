@@ -1,7 +1,10 @@
 import pandas as pd
 from pathlib import Path
 
-from model_utils import LABEL2ID
+try:
+    from src.model_utils import LABEL2ID
+except ModuleNotFoundError:
+    from model_utils import LABEL2ID
 
 
 def process_raw_to_csv():

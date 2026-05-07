@@ -3,7 +3,7 @@ data/raw/
 data/processed/
 .vscode
 .idea
-parameters/lstm/vocab.json
+
 # model checkpoints
 *.pt
 *.ckpt
@@ -12,6 +12,7 @@ parameters/lstm/vocab.json
 # cache
 __pycache__/
 *.pyc
+outputs/.matplotlib/
 
 # virtual environment
 .venv/

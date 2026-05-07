@@ -4,17 +4,30 @@ from sklearn.metrics import f1_score
 from torch.nn.utils.rnn import pack_padded_sequence
 import argparse
 
-from datasets_lstm import process_loader
-from model_utils import (
-    model_dir,
-    parameter_dir,
-    save_config,
-    save_history,
-    save_json,
-    save_label_map,
-    save_metrics,
-    save_torch_checkpoint,
-)
+try:
+    from src.datasets_lstm import process_loader
+    from src.model_utils import (
+        model_dir,
+        parameter_dir,
+        save_config,
+        save_history,
+        save_json,
+        save_label_map,
+        save_metrics,
+        save_torch_checkpoint,
+    )
+except ModuleNotFoundError:
+    from datasets_lstm import process_loader
+    from model_utils import (
+        model_dir,
+        parameter_dir,
+        save_config,
+        save_history,
+        save_json,
+        save_label_map,
+        save_metrics,
+        save_torch_checkpoint,
+    )
 
 
 MODEL_NAME = "lstm"

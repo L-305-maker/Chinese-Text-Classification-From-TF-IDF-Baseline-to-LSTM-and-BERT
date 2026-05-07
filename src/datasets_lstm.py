@@ -2,7 +2,10 @@ from torch.utils.data import Dataset,DataLoader
 import torch
 import jieba
 from collections import Counter
-from data_process import data_processor,build_id_map
+try:
+    from src.data_process import data_processor, build_id_map
+except ModuleNotFoundError:
+    from data_process import data_processor, build_id_map
 
 
 def tokenize(text):

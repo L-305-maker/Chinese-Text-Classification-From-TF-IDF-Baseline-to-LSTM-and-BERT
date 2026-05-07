@@ -376,17 +376,6 @@ outputs/
 ├─ confusion_matrix_lstm.png
 └─ confusion_matrix_bert.png
 ```
-
-模型对比表可以采用如下形式：
-
-| Model | Accuracy | Macro F1 | Weighted F1 | Training Cost | Notes |
-|---|---:|---:|---:|---|---|
-| TF-IDF + Logistic Regression | 待填写 | 待填写 | 待填写 | Low | baseline，速度快，可解释性强 |
-| LSTM | 待填写 | 待填写 | 待填写 | Medium | 能建模序列信息，但对参数较敏感 |
-| BERT | 待填写 | 待填写 | 待填写 | High | 语义建模能力强，训练成本较高 |
-
-> 建议在完成训练后，将 `parameters/*/metrics.json` 中的最终结果填入该表格，增强 README 的可信度。
-
 ---
 
 ## 8. Project Highlights

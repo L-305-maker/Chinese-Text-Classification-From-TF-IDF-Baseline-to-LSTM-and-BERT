@@ -5,6 +5,7 @@ from sklearn.metrics import f1_score
 from torch.optim import AdamW
 from transformers import BertModel
 import argparse
+import json
 from pathlib import Path
 import pandas as pd
 from models.bert.bert_unfreeze_last_n_layers import BertClassifier
@@ -360,6 +361,29 @@ def args_bert_parse(args=None):
         dest="skip_freeze_visualize",
         help="Skip visualization after saving the BERT freeze summary CSV."
     )
+    parser.add_argument(
+        "--eval_only",
+        "--eval-only",
+        action="store_true",
+        dest="eval_only",
+        help="Load an existing BERT checkpoint and export evaluation artifacts without retraining."
+    )
+    parser.add_argument(
+        "--experiment_name",
+        "--experiment-name",
+        type=str,
+        default=None,
+        dest="experiment_name",
+        help="Override the BERT experiment directory name under models/ and parameters/."
+    )
+    parser.add_argument(
+        "--eval_batch_size",
+        "--eval-batch-size",
+        type=int,
+        default=None,
+        dest="eval_batch_size",
+        help="Batch size used only by --eval-only. Defaults to the saved training batch size."
+    )
     parsed_args = parser.parse_args(args)
     if parsed_args.finetune_strategy == "partial" and parsed_args.unfreeze_last_n_layers is None:
         parsed_args.unfreeze_last_n_layers = 2
@@ -470,6 +494,9 @@ def build_freeze_run_name(finetune_strategy, unfreeze_last_n_layers=None):
 
 
 def build_experiment_name(args):
+    if getattr(args, "experiment_name", None):
+        return args.experiment_name
+
     freeze_name = build_freeze_run_name(
         finetune_strategy=args.finetune_strategy,
         unfreeze_last_n_layers=args.unfreeze_last_n_layers,
@@ -500,6 +527,7 @@ def clone_args_for_strategy(args, finetune_strategy, unfreeze_last_n_layers, use
     run_args.finetune_strategy = finetune_strategy
     run_args.unfreeze_last_n_layers = unfreeze_last_n_layers
     run_args.use_fgm = use_fgm
+    run_args.experiment_name = None
     return run_args
 
 
@@ -601,6 +629,103 @@ def build_freeze_summary_row(
         "weight_decay": args.weight_decay,
         "checkpoint_path": str(checkpoint_path),
     }
+
+
+def load_experiment_config(experiment_name):
+    config_path = PROJECT_ROOT / "parameters" / experiment_name / "config.json"
+    if not config_path.exists():
+        print(f"[WARNING] Config file not found: {config_path}. Falling back to CLI/default args.")
+        return {}
+
+    with open(config_path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def args_with_config_defaults(args, config):
+    values = vars(args).copy()
+    for key in [
+        "dropout",
+        "max_len",
+        "batch_size",
+        "bert_lr",
+        "classifier_lr",
+        "weight_decay",
+        "finetune_strategy",
+        "unfreeze_last_n_layers",
+        "use_fgm",
+        "fgm_epsilon",
+    ]:
+        if key in config:
+            values[key] = config[key]
+
+    if "use_fgm" not in values or values["use_fgm"] is None:
+        values["use_fgm"] = False
+    if "fgm_epsilon" not in values or values["fgm_epsilon"] is None:
+        values["fgm_epsilon"] = 1.0
+    if values.get("finetune_strategy") == "partial" and values.get("unfreeze_last_n_layers") is None:
+        values["unfreeze_last_n_layers"] = 2
+
+    return argparse.Namespace(**values)
+
+
+def evaluate_saved_bert_experiment(args):
+    experiment_name = build_experiment_name(args)
+    checkpoint_path = PROJECT_ROOT / "models" / experiment_name / "best_model.pth"
+    if not checkpoint_path.exists():
+        raise FileNotFoundError(f"BERT checkpoint not found: {checkpoint_path}")
+
+    config = load_experiment_config(experiment_name)
+    eval_args = args_with_config_defaults(args, config)
+    validate_fgm_args(eval_args)
+
+    _, _, test_loader, tokenizer = process_loader_bert(
+        model_name=config.get("pretrained_model", "bert-base-chinese"),
+        max_len=eval_args.max_len,
+        batch_size=eval_args.eval_batch_size or eval_args.batch_size,
+    )
+
+    tokenizer_dir = model_dir(experiment_name) / "tokenizer"
+    tokenizer.save_pretrained(tokenizer_dir)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model, param_info = build_Bert_model(
+        args=eval_args,
+        num_classes=config.get("num_classes", 10),
+        device=device,
+    )
+
+    checkpoint = torch.load(checkpoint_path, map_location=device)
+    model.load_state_dict(checkpoint["model_state_dict"])
+    criterion = nn.CrossEntropyLoss()
+    test_result = predict_one_epoch(
+        model=model,
+        loader=test_loader,
+        criterion=criterion,
+        device=device,
+    )
+
+    output_dir = Path(eval_args.freeze_output_dir)
+    save_bert_evaluation_outputs(
+        model_name=experiment_name,
+        test_result=test_result,
+        test_loader=test_loader,
+        output_dir=output_dir,
+    )
+
+    checkpoint_metrics = checkpoint.get("metrics", {})
+    metrics = {
+        **param_info,
+        "best_val_f1": checkpoint_metrics.get("best_val_f1"),
+        "best_val_acc": checkpoint_metrics.get("best_val_acc"),
+        "best_val_loss": checkpoint_metrics.get("best_val_loss"),
+        "test_loss": test_result["loss"],
+        "test_accuracy": test_result["accuracy"],
+        "test_macro_f1": test_result["macro_f1"],
+    }
+    save_metrics(experiment_name, metrics)
+
+    print(f"[INFO] Evaluation artifacts exported for: {experiment_name}")
+    return metrics
 
 
 def run_bert_experiment(
@@ -769,6 +894,9 @@ def run_freeze_sweep(args):
 def main(args=None):
     args = args_bert_parse(args)
 
+    if args.eval_only:
+        return evaluate_saved_bert_experiment(args)
+
     if args.freeze_sweep:
         return run_freeze_sweep(args)
 
@@ -791,7 +919,8 @@ def main(args=None):
         tokenizer=tokenizer,
         device=device,
         model_name=build_experiment_name(args),
-        save_detail_outputs=False,
+        save_detail_outputs=True,
+        output_dir=PROJECT_ROOT / "outputs",
     )
 
     return perf

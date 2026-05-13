@@ -88,6 +88,7 @@ def save_classification_report(
     y_true,
     y_pred,
     model_name: str,
+    labels=None,
     target_names=None,
     save_dir: str = "outputs/metrics"
 ):
@@ -97,6 +98,7 @@ def save_classification_report(
     report = classification_report(
         y_true,
         y_pred,
+        labels=labels,
         target_names=target_names,
         zero_division=0
     )
@@ -273,6 +275,7 @@ def evaluate_classification_model(
             y_true=y_true,
             y_pred=y_pred,
             model_name=model_name,
+            labels=labels,
             target_names=target_names
         )
 

@@ -3,6 +3,7 @@ import torch.nn as nn
 from sklearn.metrics import f1_score
 from torch.nn.utils.rnn import pack_padded_sequence
 import argparse
+from models.lstm.lstm_model import LSTMClassifier
 
 try:
     from src.datasets_lstm import process_loader
@@ -33,7 +34,7 @@ except ModuleNotFoundError:
 MODEL_NAME = "lstm"
 
 
-class LSTMClassifier(nn.Module):
+'''class LSTMClassifier(nn.Module):
     def __init__(
         self,
         vocab_size,
@@ -86,7 +87,7 @@ class LSTMClassifier(nn.Module):
 
         final_hidden = self.dropout(final_hidden)
         logits = self.linear(final_hidden)
-        return logits
+        return logits'''
 
 
 def train_one_epoch(model, optimizer, criterion, loader, device):

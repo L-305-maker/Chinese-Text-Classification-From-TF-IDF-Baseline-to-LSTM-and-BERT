@@ -170,7 +170,6 @@ def train(sample_size=None, small_grid=False):
     save_metrics(MODEL_NAME, metrics)
 
     if sample_size is None:
-        # Keep the old paths for compatibility after a full training run.
         joblib.dump(best_lg, MODELS_DIR / "log_tfidf_model.pkl")
         save_json(grid_lg.best_params_, PARAMETERS_DIR / "best_lg_params.json")
 

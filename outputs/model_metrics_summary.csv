@@ -1,4 +1,0 @@
-﻿model,model_name,test_accuracy,test_macro_f1,test_loss,best_val_f1,best_cv_score,error_rate,epochs,best_epoch_by_val_f1,final_train_accuracy,final_val_accuracy,final_train_macro_f1,final_val_macro_f1,final_train_loss,final_val_loss,train_val_accuracy_gap,train_val_macro_f1_gap,metrics_saved_at,history_saved_at
-TF-IDF + LR,lr_tfidf,0.4676,0.447937,,,0.25,0.5324,0,,,,,,,,,,2026-05-05T21:56:11,
-LSTM,lstm,0.9483,0.948589,0.227573,0.908825,,0.0517,5,4.0,0.99092,0.9058,0.990923,0.905916,0.032522,0.388474,0.08512,0.085007,2026-05-06T22:25:35,2026-05-06T22:24:49
-BERT,bert,0.966,0.965762,0.14005,0.974624,,0.034,5,4.0,0.99292,0.9628,0.99292,0.962571,0.022523,0.174509,0.03012,0.030349,2026-05-06T09:13:00,2026-05-06T09:12:11

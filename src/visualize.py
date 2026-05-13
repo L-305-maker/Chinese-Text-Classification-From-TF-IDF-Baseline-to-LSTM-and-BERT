@@ -358,6 +358,371 @@ def plot_generalization_gap(summary_df, output_dir):
     print(f"[INFO] Generalization gap figure saved to: {save_path}")
 
 
+def freeze_row_uses_fgm(row):
+    value = row.get("use_fgm", False)
+    if pd.isna(value):
+        return False
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y"}
+    return bool(value)
+
+
+def freeze_row_embedding_unfrozen(row):
+    value = row.get("embedding_unfrozen", False)
+    if pd.isna(value):
+        return False
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y"}
+    return bool(value)
+
+
+def freeze_strategy_label(row):
+    if row["finetune_strategy"] == "partial":
+        base_label = f"last {int(row['unfreeze_last_n_layers'])}"
+    else:
+        base_label = str(row["finetune_strategy"])
+
+    if freeze_row_uses_fgm(row) and freeze_row_embedding_unfrozen(row):
+        fgm_label = "embedding_fgm"
+    elif freeze_row_uses_fgm(row):
+        fgm_label = "fgm"
+    else:
+        fgm_label = "no_fgm"
+    return f"{base_label} {fgm_label}"
+
+
+def prepare_bert_freeze_summary(summary_df):
+    summary_df = summary_df.copy()
+    summary_df["strategy_label"] = summary_df.apply(freeze_strategy_label, axis=1)
+    return summary_df
+
+
+def plot_bert_freeze_scores(summary_df, output_dir):
+    metrics = [
+        ("train_acc", "Train Acc"),
+        ("train_f1", "Train F1"),
+        ("test_acc", "Test Acc"),
+        ("test_f1", "Test F1"),
+    ]
+    metrics = [
+        (metric, label)
+        for metric, label in metrics
+        if metric in summary_df.columns and summary_df[metric].notna().any()
+    ]
+
+    if not metrics:
+        return
+
+    fig, ax = plt.subplots(figsize=(max(10, 1.25 * len(summary_df)), 5.5))
+    x_positions = list(range(len(summary_df)))
+    width = min(0.18, 0.75 / len(metrics))
+
+    for index, (metric, label) in enumerate(metrics):
+        offset = (index - (len(metrics) - 1) / 2) * width
+        bars = ax.bar(
+            [x + offset for x in x_positions],
+            summary_df[metric],
+            width=width,
+            label=label,
+        )
+        annotate_bars(ax, bars, padding=0.004)
+
+    ax.set_title("BERT Freeze Strategy Scores")
+    ax.set_xlabel("Freeze Strategy")
+    ax.set_ylabel("Score")
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels(summary_df["strategy_label"], rotation=25, ha="right")
+    ax.set_ylim(0, min(1.08, max(summary_df[[metric for metric, _ in metrics]].max()) + 0.08))
+    ax.legend(ncol=2)
+    fig.tight_layout()
+
+    save_path = Path(output_dir) / "bert_freeze_scores.png"
+    fig.savefig(save_path, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[INFO] BERT freeze score figure saved to: {save_path}")
+
+
+def plot_bert_freeze_trainable(summary_df, output_dir):
+    required = {"trainable_ratio_percent", "trainable_params"}
+    if not required <= set(summary_df.columns):
+        return
+
+    fig, ax_ratio = plt.subplots(figsize=(max(9, 1.2 * len(summary_df)), 5))
+    bars = ax_ratio.bar(
+        summary_df["strategy_label"],
+        summary_df["trainable_ratio_percent"],
+        color="#4c78a8",
+        label="Trainable Ratio (%)",
+    )
+    annotate_bars(ax_ratio, bars, padding=max(summary_df["trainable_ratio_percent"].max() * 0.02, 0.1))
+    ax_ratio.set_title("BERT Trainable Parameters by Freeze Strategy")
+    ax_ratio.set_xlabel("Freeze Strategy")
+    ax_ratio.set_ylabel("Trainable Ratio (%)")
+    ax_ratio.tick_params(axis="x", rotation=25)
+
+    ax_params = ax_ratio.twinx()
+    params_millions = summary_df["trainable_params"] / 1_000_000
+    ax_params.plot(
+        summary_df["strategy_label"],
+        params_millions,
+        color="#d95f02",
+        marker="o",
+        linewidth=2,
+        label="Trainable Params (M)",
+    )
+    ax_params.set_ylabel("Trainable Params (M)")
+
+    lines, labels = ax_ratio.get_legend_handles_labels()
+    lines_2, labels_2 = ax_params.get_legend_handles_labels()
+    ax_ratio.legend(lines + lines_2, labels + labels_2, loc="upper left")
+    fig.tight_layout()
+
+    save_path = Path(output_dir) / "bert_freeze_trainable_params.png"
+    fig.savefig(save_path, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[INFO] BERT freeze trainable parameter figure saved to: {save_path}")
+
+
+def plot_bert_freeze_generalization_gap(summary_df, output_dir):
+    if not {"train_acc", "test_acc", "train_f1", "test_f1"} <= set(summary_df.columns):
+        return
+
+    gap_df = summary_df.copy()
+    gap_df["acc_gap"] = gap_df["train_acc"] - gap_df["test_acc"]
+    gap_df["f1_gap"] = gap_df["train_f1"] - gap_df["test_f1"]
+
+    fig, ax = plt.subplots(figsize=(max(9, 1.2 * len(gap_df)), 5))
+    x_positions = list(range(len(gap_df)))
+    width = 0.35
+
+    for index, (column, label) in enumerate([("acc_gap", "Acc Gap"), ("f1_gap", "F1 Gap")]):
+        offset = (index - 0.5) * width
+        bars = ax.bar(
+            [x + offset for x in x_positions],
+            gap_df[column],
+            width=width,
+            label=label,
+        )
+        annotate_bars(ax, bars, padding=0.003)
+
+    ax.axhline(0, color="#333333", linewidth=1)
+    ax.set_title("BERT Freeze Train-Test Gap")
+    ax.set_xlabel("Freeze Strategy")
+    ax.set_ylabel("Train - Test")
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels(gap_df["strategy_label"], rotation=25, ha="right")
+    ax.legend()
+    fig.tight_layout()
+
+    save_path = Path(output_dir) / "bert_freeze_generalization_gap.png"
+    fig.savefig(save_path, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[INFO] BERT freeze generalization gap figure saved to: {save_path}")
+
+
+def plot_bert_freeze_efficiency(summary_df, output_dir):
+    required = {"trainable_ratio_percent", "test_f1", "strategy_label"}
+    if not required <= set(summary_df.columns):
+        return
+
+    fig, ax = plt.subplots(figsize=(8, 5.5))
+    ax.scatter(
+        summary_df["trainable_ratio_percent"],
+        summary_df["test_f1"],
+        s=80,
+        color="#2ca02c",
+    )
+
+    for _, row in summary_df.iterrows():
+        ax.annotate(
+            row["strategy_label"],
+            (row["trainable_ratio_percent"], row["test_f1"]),
+            textcoords="offset points",
+            xytext=(6, 6),
+            fontsize=9,
+        )
+
+    ax.set_title("BERT Freeze Efficiency")
+    ax.set_xlabel("Trainable Ratio (%)")
+    ax.set_ylabel("Test Macro F1")
+    ax.set_ylim(
+        max(0, summary_df["test_f1"].min() - 0.04),
+        min(1.05, summary_df["test_f1"].max() + 0.04),
+    )
+    fig.tight_layout()
+
+    save_path = Path(output_dir) / "bert_freeze_efficiency.png"
+    fig.savefig(save_path, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[INFO] BERT freeze efficiency figure saved to: {save_path}")
+
+
+def build_bert_fgm_comparison(summary_df, output_dir):
+    required = {
+        "finetune_strategy",
+        "unfreeze_last_n_layers",
+        "use_fgm",
+        "train_acc",
+        "train_f1",
+        "test_acc",
+        "test_f1",
+    }
+    if not required <= set(summary_df.columns):
+        return None
+
+    fgm_df = summary_df[
+        (summary_df["finetune_strategy"] == "partial")
+        & (summary_df["unfreeze_last_n_layers"].isin([4, 8]))
+    ].copy()
+    if fgm_df.empty:
+        return None
+
+    fgm_df["use_fgm_bool"] = fgm_df.apply(freeze_row_uses_fgm, axis=1)
+    fgm_df["embedding_unfrozen_bool"] = fgm_df.apply(freeze_row_embedding_unfrozen, axis=1)
+    comparison_rows = []
+
+    for layer, group in fgm_df.groupby("unfreeze_last_n_layers"):
+        no_fgm = group[group["use_fgm_bool"] == False]
+        embedding_fgm = group[
+            (group["use_fgm_bool"] == True)
+            & (group["embedding_unfrozen_bool"] == True)
+        ]
+        if embedding_fgm.empty:
+            embedding_fgm = group[group["use_fgm_bool"] == True]
+
+        if no_fgm.empty or embedding_fgm.empty:
+            continue
+
+        no_fgm_row = no_fgm.iloc[0]
+        fgm_row = embedding_fgm.iloc[0]
+        comparison_rows.append(
+            {
+                "unfreeze_last_n_layers": int(layer),
+                "no_fgm_train_acc": no_fgm_row["train_acc"],
+                "embedding_fgm_train_acc": fgm_row["train_acc"],
+                "delta_train_acc": fgm_row["train_acc"] - no_fgm_row["train_acc"],
+                "no_fgm_train_f1": no_fgm_row["train_f1"],
+                "embedding_fgm_train_f1": fgm_row["train_f1"],
+                "delta_train_f1": fgm_row["train_f1"] - no_fgm_row["train_f1"],
+                "no_fgm_test_acc": no_fgm_row["test_acc"],
+                "embedding_fgm_test_acc": fgm_row["test_acc"],
+                "delta_test_acc": fgm_row["test_acc"] - no_fgm_row["test_acc"],
+                "no_fgm_test_f1": no_fgm_row["test_f1"],
+                "embedding_fgm_test_f1": fgm_row["test_f1"],
+                "delta_test_f1": fgm_row["test_f1"] - no_fgm_row["test_f1"],
+            }
+        )
+
+    if not comparison_rows:
+        return None
+
+    comparison_df = pd.DataFrame(comparison_rows).sort_values("unfreeze_last_n_layers")
+    save_path = Path(output_dir) / "bert_fgm_comparison.csv"
+    comparison_df.to_csv(save_path, index=False, encoding="utf-8-sig")
+    print(f"[INFO] BERT FGM comparison saved to: {save_path}")
+    return comparison_df
+
+
+def plot_bert_fgm_comparison(comparison_df, output_dir):
+    if comparison_df is None or comparison_df.empty:
+        return
+
+    layer_labels = [f"last {layer}" for layer in comparison_df["unfreeze_last_n_layers"]]
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    x_positions = list(range(len(comparison_df)))
+    width = 0.35
+
+    for ax, metric, title, ylabel in [
+        (axes[0], "test_acc", "Embedding FGM Test Accuracy Comparison", "Test Accuracy"),
+        (axes[1], "test_f1", "Embedding FGM Test Macro F1 Comparison", "Test Macro F1"),
+    ]:
+        no_fgm_values = comparison_df[f"no_fgm_{metric}"]
+        fgm_values = comparison_df[f"embedding_fgm_{metric}"]
+        no_fgm_bars = ax.bar(
+            [x - width / 2 for x in x_positions],
+            no_fgm_values,
+            width=width,
+            label="no_fgm",
+        )
+        fgm_bars = ax.bar(
+            [x + width / 2 for x in x_positions],
+            fgm_values,
+            width=width,
+            label="embedding_fgm",
+        )
+        annotate_bars(ax, no_fgm_bars, padding=0.004)
+        annotate_bars(ax, fgm_bars, padding=0.004)
+        ax.set_title(title)
+        ax.set_xlabel("Partial Unfreeze Layers")
+        ax.set_ylabel(ylabel)
+        ax.set_xticks(x_positions)
+        ax.set_xticklabels(layer_labels)
+        ax.set_ylim(0, min(1.08, max(no_fgm_values.max(), fgm_values.max()) + 0.08))
+        ax.legend()
+
+    fig.tight_layout()
+    save_path = Path(output_dir) / "bert_fgm_comparison.png"
+    fig.savefig(save_path, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[INFO] BERT FGM comparison figure saved to: {save_path}")
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    x_positions = list(range(len(comparison_df)))
+    for index, (column, label) in enumerate([
+        ("delta_test_acc", "Delta Test Acc"),
+        ("delta_test_f1", "Delta Test F1"),
+    ]):
+        offset = (index - 0.5) * width
+        bars = ax.bar(
+            [x + offset for x in x_positions],
+            comparison_df[column],
+            width=width,
+            label=label,
+        )
+        annotate_bars(ax, bars, padding=0.0008)
+
+    ax.axhline(0, color="#333333", linewidth=1)
+    ax.set_title("Embedding FGM Gain Over no_fgm")
+    ax.set_xlabel("Partial Unfreeze Layers")
+    ax.set_ylabel("embedding_fgm - no_fgm")
+    ax.set_xticks(x_positions)
+    ax.set_xticklabels(layer_labels)
+    ax.legend()
+    fig.tight_layout()
+
+    save_path = Path(output_dir) / "bert_fgm_gain.png"
+    fig.savefig(save_path, bbox_inches="tight")
+    plt.close(fig)
+    print(f"[INFO] BERT FGM gain figure saved to: {save_path}")
+
+
+def visualize_bert_freeze_summary(summary_csv, output_dir):
+    summary_csv = Path(summary_csv)
+    output_dir = ensure_dir(output_dir)
+
+    if not summary_csv.exists():
+        raise FileNotFoundError(f"BERT freeze summary file not found: {summary_csv}")
+
+    summary_df = pd.read_csv(summary_csv)
+    if summary_df.empty:
+        raise ValueError(f"BERT freeze summary file is empty: {summary_csv}")
+
+    summary_df = prepare_bert_freeze_summary(summary_df)
+
+    configure_plot_style()
+    plot_bert_freeze_scores(summary_df, output_dir)
+    plot_bert_freeze_trainable(summary_df, output_dir)
+    plot_bert_freeze_generalization_gap(summary_df, output_dir)
+    plot_bert_freeze_efficiency(summary_df, output_dir)
+    fgm_comparison_df = build_bert_fgm_comparison(summary_df, output_dir)
+    plot_bert_fgm_comparison(fgm_comparison_df, output_dir)
+
+    print("\nBERT freeze summary:")
+    print(summary_df.to_string(index=False))
+    return summary_df
+
+
 def visualize(models, parameters_dir, output_dir):
     parameters_dir = Path(parameters_dir)
     output_dir = ensure_dir(output_dir)
@@ -404,6 +769,12 @@ def parse_args(args=None):
         description="Compare model training results and save visualizations."
     )
     parser.add_argument(
+        "--task",
+        choices=["models", "bert_freeze", "both"],
+        default="models",
+        help="Choose whether to visualize model comparison, BERT freeze summary, or both.",
+    )
+    parser.add_argument(
         "--models",
         nargs="+",
         default=list(DEFAULT_MODELS.keys()),
@@ -419,16 +790,33 @@ def parse_args(args=None):
         default=str(PROJECT_ROOT / "outputs"),
         help="Directory to save summary files and figures.",
     )
+    parser.add_argument(
+        "--bert-freeze-summary",
+        default=str(PROJECT_ROOT / "outputs" / "bert_freeze_summary.csv"),
+        help="CSV generated by BERT --freeze-sweep.",
+    )
     return parser.parse_args(args)
 
 
 def main(args=None):
     parsed_args = parse_args(args)
-    return visualize(
-        models=parsed_args.models,
-        parameters_dir=parsed_args.parameters_dir,
-        output_dir=parsed_args.output_dir,
-    )
+    model_summary = None
+    freeze_summary = None
+
+    if parsed_args.task in {"models", "both"}:
+        model_summary = visualize(
+            models=parsed_args.models,
+            parameters_dir=parsed_args.parameters_dir,
+            output_dir=parsed_args.output_dir,
+        )
+
+    if parsed_args.task in {"bert_freeze", "both"}:
+        freeze_summary = visualize_bert_freeze_summary(
+            summary_csv=parsed_args.bert_freeze_summary,
+            output_dir=parsed_args.output_dir,
+        )
+
+    return freeze_summary if parsed_args.task == "bert_freeze" else model_summary
 
 
 if __name__ == "__main__":

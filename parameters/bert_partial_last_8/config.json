@@ -1,0 +1,22 @@
+{
+    "model_name": "bert_partial_last_8",
+    "pretrained_model": "bert-base-chinese",
+    "num_classes": 10,
+    "dropout": 0.3,
+    "max_len": 128,
+    "batch_size": 8,
+    "bert_lr": 2e-05,
+    "classifier_lr": 0.0001,
+    "epochs": 3,
+    "optimizer": "AdamW",
+    "criterion": "CrossEntropyLoss",
+    "save_model": "models/bert_partial_last_8/best_model.pth",
+    "weight_decay": 0.01,
+    "finetune_strategy": "partial",
+    "unfreeze_last_n_layers": 8,
+    "tokenizer_dir": "D:\\python\\Chinese Text Classification From TF-IDF Baseline to LSTM and BERT\\models\\bert_partial_last_8\\tokenizer",
+    "total_params": 102275338,
+    "trainable_params": 57301258,
+    "trainable_ratio": 0.5602646651727516,
+    "saved_at": "2026-05-13T15:15:04"
+}

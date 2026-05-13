@@ -1,7 +1,7 @@
 import json
 from datetime import datetime
 from pathlib import Path
-
+from torch.optim import AdamW
 try:
     import numpy as np
 except ImportError:  # pragma: no cover - numpy is optional for JSON conversion.
@@ -144,3 +144,79 @@ def save_torch_checkpoint(
     path = model_dir(model_name) / filename
     torch.save(checkpoint, path)
     return path
+
+
+def count_parameters(model):
+    total_params = 0
+    trainable_params = 0
+
+    for param in model.parameters():
+        num_params = param.numel()
+        total_params += num_params
+
+        if param.requires_grad:
+            trainable_params += num_params
+
+    trainable_ratio = trainable_params / total_params if total_params>0 else 0
+
+    return {
+        "total_params": total_params,
+        "trainable_params": trainable_params,
+        "trainable_ratio": trainable_ratio
+    }
+
+def print_trainable_parameters(model):
+    param_info = count_parameters(model)
+
+    print(f"Total parameters:{param_info['total_params']}")
+    print(f"Trainable parameters:{param_info['trainable_params']}")
+    print(f"Trainable Ratio:{param_info['trainable_ratio']*100:.2f}%")
+
+    return param_info
+
+
+def build_optimizer(
+    model,
+    bert_lr: float = 2e-5,
+    classifier_lr: float = 1e-4,
+    weight_decay: float = 0.01
+):
+
+    bert_params = []
+    classifier_params = []
+
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
+
+        if name.startswith("bert."):
+            bert_params.append(param)
+        else:
+            classifier_params.append(param)
+
+    optimizer_grouped_parameters = []
+
+    if len(bert_params) > 0:
+        optimizer_grouped_parameters.append({
+            "params": bert_params,
+            "lr": bert_lr,
+            "weight_decay": weight_decay
+        })
+
+    if len(classifier_params) > 0:
+        optimizer_grouped_parameters.append({
+            "params": classifier_params,
+            "lr": classifier_lr,
+            "weight_decay": weight_decay
+        })
+
+    optimizer = AdamW(optimizer_grouped_parameters)
+
+    print(f"BERT trainable parameter tensors:       {len(bert_params)}")
+    print(f"Classifier trainable parameter tensors: {len(classifier_params)}")
+    print(f"BERT learning rate:                     {bert_lr}")
+    print(f"Classifier learning rate:               {classifier_lr}")
+
+    return optimizer
+
+

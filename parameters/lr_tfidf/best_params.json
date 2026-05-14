@@ -1,9 +1,0 @@
-{
-    "lr__C": 1,
-    "lr__max_iter": 10000,
-    "tfidf__max_features": 5000,
-    "tfidf__ngram_range": [
-        1,
-        2
-    ]
-}

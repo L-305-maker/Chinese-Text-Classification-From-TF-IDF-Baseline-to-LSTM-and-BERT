@@ -1,6 +1,0 @@
-{
-    "test_accuracy": 0.4676,
-    "test_macro_f1": 0.447937225541183,
-    "best_cv_score": 0.25,
-    "saved_at": "2026-05-05T21:56:11"
-}

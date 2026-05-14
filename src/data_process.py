@@ -1,26 +1,24 @@
 import pandas as pd
-from pathlib import Path
 
 try:
     from src.model_utils import LABEL2ID
+    from src.utils.paths import PROCESSED_DATA_DIR, RAW_DATA_DIR
 except ModuleNotFoundError:
     from model_utils import LABEL2ID
+    from utils.paths import PROCESSED_DATA_DIR, RAW_DATA_DIR
 
 
 def process_raw_to_csv():
-    current_script_dir = Path(__file__).resolve().parent
-    base_path = current_script_dir.parent
-
     source_files = [
-        base_path / "data" / "raw" / "cnews.test.txt",
-        base_path / "data" / "raw" / "cnews.train.txt",
-        base_path / "data" / "raw" / "cnews.val.txt"
+        RAW_DATA_DIR / "cnews.test.txt",
+        RAW_DATA_DIR / "cnews.train.txt",
+        RAW_DATA_DIR / "cnews.val.txt"
     ]
 
     target_files = [
-        base_path / "data" / "processed" / "test_data.csv",
-        base_path / "data" / "processed" / "train_data.csv",
-        base_path / "data" / "processed" / "val_data.csv"
+        PROCESSED_DATA_DIR / "test_data.csv",
+        PROCESSED_DATA_DIR / "train_data.csv",
+        PROCESSED_DATA_DIR / "val_data.csv"
     ]
 
     for source, target in zip(source_files, target_files):
@@ -53,12 +51,9 @@ def process_raw_to_csv():
 
 
 def data_processor():
-    current_script_dir = Path(__file__).resolve().parent
-    base_path = current_script_dir.parent / "data" / "processed"
-
-    test_path = base_path / "test_data.csv"
-    train_path = base_path / "train_data.csv"
-    val_path = base_path / "val_data.csv"
+    test_path = PROCESSED_DATA_DIR / "test_data.csv"
+    train_path = PROCESSED_DATA_DIR / "train_data.csv"
+    val_path = PROCESSED_DATA_DIR / "val_data.csv"
 
     test_data = pd.read_csv(test_path)
     train_data = pd.read_csv(train_path)

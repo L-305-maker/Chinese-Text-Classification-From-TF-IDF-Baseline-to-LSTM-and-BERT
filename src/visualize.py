@@ -4,8 +4,13 @@ import os
 from pathlib import Path
 
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-MPL_CONFIG_DIR = PROJECT_ROOT / "outputs" / ".matplotlib"
+try:
+    from src.utils.paths import COMPARISON_FGM_DIR, PROJECT_ROOT, REPORTS_DIR, RUNS_DIR
+except ModuleNotFoundError:
+    from utils.paths import COMPARISON_FGM_DIR, PROJECT_ROOT, REPORTS_DIR, RUNS_DIR
+
+
+MPL_CONFIG_DIR = REPORTS_DIR / ".matplotlib"
 MPL_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault("MPLCONFIGDIR", str(MPL_CONFIG_DIR))
 
@@ -22,6 +27,8 @@ DEFAULT_MODELS = {
     "lstm": "LSTM",
     "bert": "BERT",
 }
+
+FGM_COMPARISON_LAYERS = [4, 8]
 
 
 def ensure_dir(path):
@@ -367,6 +374,22 @@ def freeze_row_uses_fgm(row):
     return bool(value)
 
 
+def _first_existing(row, keys, default=None):
+    for key in keys:
+        if key in row and not pd.isna(row[key]):
+            return row[key]
+    return default
+
+
+def _metric_value(row, *keys):
+    value = _first_existing(row, keys)
+    return None if value is None else float(value)
+
+
+def _variant_name(run_name, use_fgm):
+    return "with_fgm" if use_fgm else "without_fgm"
+
+
 def freeze_row_embedding_unfrozen(row):
     value = row.get("embedding_unfrozen", False)
     if pd.isna(value):
@@ -557,7 +580,78 @@ def plot_bert_freeze_efficiency(summary_df, output_dir):
     print(f"[INFO] BERT freeze efficiency figure saved to: {save_path}")
 
 
-def build_bert_fgm_comparison(summary_df, output_dir):
+def build_bert_fgm_summary_from_runs(runs_dir, layers=FGM_COMPARISON_LAYERS):
+    runs_dir = Path(runs_dir)
+    rows = []
+
+    if not runs_dir.exists():
+        raise FileNotFoundError(f"Runs directory not found: {runs_dir}")
+
+    for run_path in sorted(path for path in runs_dir.iterdir() if path.is_dir()):
+        config = load_json(run_path / "config.json")
+        metrics = load_json(run_path / "metrics.json")
+        if not config or not metrics:
+            continue
+
+        strategy = config.get("finetune_strategy")
+        unfreeze_layers = config.get("unfreeze_last_n_layers")
+        if strategy != "partial" or unfreeze_layers is None:
+            continue
+
+        unfreeze_layers = int(unfreeze_layers)
+        if unfreeze_layers not in layers:
+            continue
+
+        run_name = config.get("model_name", run_path.name)
+        use_fgm = bool(config.get("use_fgm", False))
+        if not use_fgm and "embedding_fgm" in run_name:
+            use_fgm = True
+
+        embedding_unfrozen = bool(config.get("embedding_unfrozen", False))
+        if use_fgm and "embedding_fgm" in run_name:
+            embedding_unfrozen = True
+
+        rows.append(
+            {
+                "experiment_name": run_name,
+                "run_name": run_path.name,
+                "finetune_strategy": strategy,
+                "unfreeze_last_n_layers": unfreeze_layers,
+                "use_fgm": use_fgm,
+                "embedding_unfrozen": embedding_unfrozen,
+                "train_acc": _metric_value(metrics, "train_acc", "train_accuracy"),
+                "train_f1": _metric_value(metrics, "train_f1", "train_macro_f1"),
+                "test_acc": _metric_value(metrics, "test_acc", "test_accuracy"),
+                "test_f1": _metric_value(metrics, "test_f1", "test_macro_f1"),
+                "best_val_f1": _metric_value(metrics, "best_val_f1"),
+                "test_loss": _metric_value(metrics, "test_loss"),
+                "metrics_saved_at": metrics.get("saved_at"),
+            }
+        )
+
+    if not rows:
+        return pd.DataFrame()
+
+    return prepare_bert_freeze_summary(pd.DataFrame(rows))
+
+
+def _choose_fgm_variant(group, use_fgm):
+    variants = group[group["use_fgm_bool"] == use_fgm].copy()
+    if variants.empty:
+        return None
+
+    if use_fgm:
+        variants["variant_rank"] = variants["embedding_unfrozen_bool"].map({True: 0, False: 1})
+    else:
+        variants["variant_rank"] = variants["run_name"].astype(str).str.endswith("_no_fgm").map(
+            {True: 0, False: 1}
+        )
+
+    return variants.sort_values(["variant_rank", "run_name"]).iloc[0]
+
+
+def build_bert_fgm_comparison(summary_df, output_dir, layers=FGM_COMPARISON_LAYERS):
+    output_dir = ensure_dir(output_dir)
     required = {
         "finetune_strategy",
         "unfreeze_last_n_layers",
@@ -570,48 +664,91 @@ def build_bert_fgm_comparison(summary_df, output_dir):
     if not required <= set(summary_df.columns):
         return None
 
+    summary_df = summary_df.copy()
+    source_path = Path(output_dir) / "bert_fgm_source_rows.csv"
+    missing_path = Path(output_dir) / "bert_fgm_missing_runs.csv"
+
     fgm_df = summary_df[
         (summary_df["finetune_strategy"] == "partial")
-        & (summary_df["unfreeze_last_n_layers"].isin([4, 8]))
+        & (summary_df["unfreeze_last_n_layers"].isin(layers))
     ].copy()
     if fgm_df.empty:
         return None
 
     fgm_df["use_fgm_bool"] = fgm_df.apply(freeze_row_uses_fgm, axis=1)
     fgm_df["embedding_unfrozen_bool"] = fgm_df.apply(freeze_row_embedding_unfrozen, axis=1)
+    if "run_name" not in fgm_df.columns:
+        fgm_df["run_name"] = fgm_df.get("experiment_name", fgm_df.index.astype(str))
+
+    fgm_df.sort_values(["unfreeze_last_n_layers", "use_fgm_bool", "run_name"]).to_csv(
+        source_path,
+        index=False,
+        encoding="utf-8-sig",
+    )
+    print(f"[INFO] BERT FGM source rows saved to: {source_path}")
+
     comparison_rows = []
+    missing_rows = []
 
-    for layer, group in fgm_df.groupby("unfreeze_last_n_layers"):
-        no_fgm = group[group["use_fgm_bool"] == False]
-        embedding_fgm = group[
-            (group["use_fgm_bool"] == True)
-            & (group["embedding_unfrozen_bool"] == True)
-        ]
-        if embedding_fgm.empty:
-            embedding_fgm = group[group["use_fgm_bool"] == True]
+    for layer in layers:
+        group = fgm_df[fgm_df["unfreeze_last_n_layers"] == layer]
+        no_fgm_row = _choose_fgm_variant(group, use_fgm=False)
+        fgm_row = _choose_fgm_variant(group, use_fgm=True)
 
-        if no_fgm.empty or embedding_fgm.empty:
-            continue
+        if no_fgm_row is None:
+            missing_rows.append(
+                {
+                    "unfreeze_last_n_layers": int(layer),
+                    "missing_variant": "without_fgm",
+                    "expected_run_name": f"bert_partial_last_{layer}_no_fgm",
+                }
+            )
+        if fgm_row is None:
+            missing_rows.append(
+                {
+                    "unfreeze_last_n_layers": int(layer),
+                    "missing_variant": "with_fgm",
+                    "expected_run_name": f"bert_partial_last_{layer}_embedding_fgm",
+                }
+            )
 
-        no_fgm_row = no_fgm.iloc[0]
-        fgm_row = embedding_fgm.iloc[0]
+        def metric(row, key):
+            return None if row is None else _metric_value(row, key)
+
+        def delta(metric_key):
+            no_fgm_value = metric(no_fgm_row, metric_key)
+            fgm_value = metric(fgm_row, metric_key)
+            if no_fgm_value is None or fgm_value is None:
+                return None
+            return fgm_value - no_fgm_value
+
         comparison_rows.append(
             {
                 "unfreeze_last_n_layers": int(layer),
-                "no_fgm_train_acc": no_fgm_row["train_acc"],
-                "embedding_fgm_train_acc": fgm_row["train_acc"],
-                "delta_train_acc": fgm_row["train_acc"] - no_fgm_row["train_acc"],
-                "no_fgm_train_f1": no_fgm_row["train_f1"],
-                "embedding_fgm_train_f1": fgm_row["train_f1"],
-                "delta_train_f1": fgm_row["train_f1"] - no_fgm_row["train_f1"],
-                "no_fgm_test_acc": no_fgm_row["test_acc"],
-                "embedding_fgm_test_acc": fgm_row["test_acc"],
-                "delta_test_acc": fgm_row["test_acc"] - no_fgm_row["test_acc"],
-                "no_fgm_test_f1": no_fgm_row["test_f1"],
-                "embedding_fgm_test_f1": fgm_row["test_f1"],
-                "delta_test_f1": fgm_row["test_f1"] - no_fgm_row["test_f1"],
+                "without_fgm_experiment": None if no_fgm_row is None else no_fgm_row["run_name"],
+                "with_fgm_experiment": None if fgm_row is None else fgm_row["run_name"],
+                "has_without_fgm": no_fgm_row is not None,
+                "has_with_fgm": fgm_row is not None,
+                "without_fgm_train_acc": metric(no_fgm_row, "train_acc"),
+                "with_fgm_train_acc": metric(fgm_row, "train_acc"),
+                "delta_train_acc": delta("train_acc"),
+                "without_fgm_train_f1": metric(no_fgm_row, "train_f1"),
+                "with_fgm_train_f1": metric(fgm_row, "train_f1"),
+                "delta_train_f1": delta("train_f1"),
+                "without_fgm_test_acc": metric(no_fgm_row, "test_acc"),
+                "with_fgm_test_acc": metric(fgm_row, "test_acc"),
+                "delta_test_acc": delta("test_acc"),
+                "without_fgm_test_f1": metric(no_fgm_row, "test_f1"),
+                "with_fgm_test_f1": metric(fgm_row, "test_f1"),
+                "delta_test_f1": delta("test_f1"),
             }
         )
+
+    if missing_rows:
+        pd.DataFrame(missing_rows).to_csv(missing_path, index=False, encoding="utf-8-sig")
+        print(f"[WARNING] Missing BERT FGM comparison runs saved to: {missing_path}")
+    elif missing_path.exists():
+        missing_path.unlink()
 
     if not comparison_rows:
         return None
@@ -637,28 +774,37 @@ def plot_bert_fgm_comparison(comparison_df, output_dir):
         (axes[0], "test_acc", "Embedding FGM Test Accuracy Comparison", "Test Accuracy"),
         (axes[1], "test_f1", "Embedding FGM Test Macro F1 Comparison", "Test Macro F1"),
     ]:
-        no_fgm_values = comparison_df[f"no_fgm_{metric}"]
-        fgm_values = comparison_df[f"embedding_fgm_{metric}"]
+        no_fgm_values = comparison_df[f"without_fgm_{metric}"]
+        fgm_values = comparison_df[f"with_fgm_{metric}"]
         no_fgm_bars = ax.bar(
             [x - width / 2 for x in x_positions],
             no_fgm_values,
             width=width,
-            label="no_fgm",
+            label="without_fgm",
         )
         fgm_bars = ax.bar(
             [x + width / 2 for x in x_positions],
             fgm_values,
             width=width,
-            label="embedding_fgm",
+            label="with_fgm",
         )
         annotate_bars(ax, no_fgm_bars, padding=0.004)
         annotate_bars(ax, fgm_bars, padding=0.004)
+
+        for index, value in enumerate(no_fgm_values):
+            if pd.isna(value):
+                ax.text(index - width / 2, 0.02, "missing", ha="center", rotation=90, color="#b00020")
+        for index, value in enumerate(fgm_values):
+            if pd.isna(value):
+                ax.text(index + width / 2, 0.02, "missing", ha="center", rotation=90, color="#b00020")
+
         ax.set_title(title)
         ax.set_xlabel("Partial Unfreeze Layers")
         ax.set_ylabel(ylabel)
         ax.set_xticks(x_positions)
         ax.set_xticklabels(layer_labels)
-        ax.set_ylim(0, min(1.08, max(no_fgm_values.max(), fgm_values.max()) + 0.08))
+        max_value = pd.concat([no_fgm_values, fgm_values]).max(skipna=True)
+        ax.set_ylim(0, min(1.08, max_value + 0.08) if pd.notna(max_value) else 1.0)
         ax.legend()
 
     fig.tight_layout()
@@ -666,6 +812,10 @@ def plot_bert_fgm_comparison(comparison_df, output_dir):
     fig.savefig(save_path, bbox_inches="tight")
     plt.close(fig)
     print(f"[INFO] BERT FGM comparison figure saved to: {save_path}")
+
+    delta_columns = ["delta_test_acc", "delta_test_f1"]
+    if not comparison_df[delta_columns].notna().any().any():
+        return
 
     fig, ax = plt.subplots(figsize=(8, 5))
     x_positions = list(range(len(comparison_df)))
@@ -683,9 +833,9 @@ def plot_bert_fgm_comparison(comparison_df, output_dir):
         annotate_bars(ax, bars, padding=0.0008)
 
     ax.axhline(0, color="#333333", linewidth=1)
-    ax.set_title("Embedding FGM Gain Over no_fgm")
+    ax.set_title("FGM Gain Over without_fgm")
     ax.set_xlabel("Partial Unfreeze Layers")
-    ax.set_ylabel("embedding_fgm - no_fgm")
+    ax.set_ylabel("with_fgm - without_fgm")
     ax.set_xticks(x_positions)
     ax.set_xticklabels(layer_labels)
     ax.legend()
@@ -697,9 +847,10 @@ def plot_bert_fgm_comparison(comparison_df, output_dir):
     print(f"[INFO] BERT FGM gain figure saved to: {save_path}")
 
 
-def visualize_bert_freeze_summary(summary_csv, output_dir):
+def visualize_bert_freeze_summary(summary_csv, output_dir, comparison_fgm_dir=COMPARISON_FGM_DIR):
     summary_csv = Path(summary_csv)
     output_dir = ensure_dir(output_dir)
+    comparison_fgm_dir = ensure_dir(comparison_fgm_dir)
 
     if not summary_csv.exists():
         raise FileNotFoundError(f"BERT freeze summary file not found: {summary_csv}")
@@ -715,12 +866,33 @@ def visualize_bert_freeze_summary(summary_csv, output_dir):
     plot_bert_freeze_trainable(summary_df, output_dir)
     plot_bert_freeze_generalization_gap(summary_df, output_dir)
     plot_bert_freeze_efficiency(summary_df, output_dir)
-    fgm_comparison_df = build_bert_fgm_comparison(summary_df, output_dir)
-    plot_bert_fgm_comparison(fgm_comparison_df, output_dir)
+    fgm_comparison_df = build_bert_fgm_comparison(summary_df, comparison_fgm_dir)
+    plot_bert_fgm_comparison(fgm_comparison_df, comparison_fgm_dir)
 
     print("\nBERT freeze summary:")
     print(summary_df.to_string(index=False))
     return summary_df
+
+
+def visualize_bert_fgm_from_runs(runs_dir=RUNS_DIR, output_dir=COMPARISON_FGM_DIR):
+    output_dir = ensure_dir(output_dir)
+    summary_df = build_bert_fgm_summary_from_runs(
+        runs_dir=runs_dir,
+        layers=FGM_COMPARISON_LAYERS,
+    )
+
+    if summary_df.empty:
+        raise FileNotFoundError(
+            f"No partial-4/8 BERT metrics were found under: {runs_dir}"
+        )
+
+    configure_plot_style()
+    comparison_df = build_bert_fgm_comparison(summary_df, output_dir)
+    plot_bert_fgm_comparison(comparison_df, output_dir)
+
+    print("\nBERT FGM comparison:")
+    print(comparison_df.to_string(index=False))
+    return comparison_df
 
 
 def visualize(models, parameters_dir, output_dir):
@@ -770,30 +942,35 @@ def parse_args(args=None):
     )
     parser.add_argument(
         "--task",
-        choices=["models", "bert_freeze", "both"],
+        choices=["models", "bert_freeze", "fgm", "both"],
         default="models",
-        help="Choose whether to visualize model comparison, BERT freeze summary, or both.",
+        help="Choose whether to visualize model comparison, BERT freeze summary, FGM comparison, or both.",
     )
     parser.add_argument(
         "--models",
         nargs="+",
         default=list(DEFAULT_MODELS.keys()),
-        help="Model directory names under parameters/.",
+        help="Model directory names under runs/.",
     )
     parser.add_argument(
         "--parameters-dir",
-        default=str(PROJECT_ROOT / "parameters"),
+        default=str(RUNS_DIR),
         help="Directory that stores each model's metrics.json/history.json.",
     )
     parser.add_argument(
         "--output-dir",
-        default=str(PROJECT_ROOT / "outputs"),
+        default=str(REPORTS_DIR / "model_comparison"),
         help="Directory to save summary files and figures.",
     )
     parser.add_argument(
         "--bert-freeze-summary",
-        default=str(PROJECT_ROOT / "outputs" / "bert_freeze_summary.csv"),
+        default=str(REPORTS_DIR / "bert_freeze" / "bert_freeze_summary.csv"),
         help="CSV generated by BERT --freeze-sweep.",
+    )
+    parser.add_argument(
+        "--comparison-fgm-dir",
+        default=str(COMPARISON_FGM_DIR),
+        help="Directory to save partial-4/8 with-vs-without FGM comparison data and figures.",
     )
     return parser.parse_args(args)
 
@@ -802,6 +979,7 @@ def main(args=None):
     parsed_args = parse_args(args)
     model_summary = None
     freeze_summary = None
+    fgm_summary = None
 
     if parsed_args.task in {"models", "both"}:
         model_summary = visualize(
@@ -814,9 +992,20 @@ def main(args=None):
         freeze_summary = visualize_bert_freeze_summary(
             summary_csv=parsed_args.bert_freeze_summary,
             output_dir=parsed_args.output_dir,
+            comparison_fgm_dir=parsed_args.comparison_fgm_dir,
         )
 
-    return freeze_summary if parsed_args.task == "bert_freeze" else model_summary
+    if parsed_args.task in {"fgm", "both"}:
+        fgm_summary = visualize_bert_fgm_from_runs(
+            runs_dir=parsed_args.parameters_dir,
+            output_dir=parsed_args.comparison_fgm_dir,
+        )
+
+    if parsed_args.task == "bert_freeze":
+        return freeze_summary
+    if parsed_args.task == "fgm":
+        return fgm_summary
+    return model_summary
 
 
 if __name__ == "__main__":

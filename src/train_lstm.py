@@ -1,12 +1,11 @@
 import torch
 import torch.nn as nn
 from sklearn.metrics import f1_score
-from torch.nn.utils.rnn import pack_padded_sequence
 import argparse
-from models.lstm.lstm_model import LSTMClassifier
 
 try:
     from src.datasets_lstm import process_loader
+    from src.models.lstm_classifier import LSTMClassifier
     from src.model_utils import (
         model_dir,
         parameter_dir,
@@ -19,6 +18,7 @@ try:
     )
 except ModuleNotFoundError:
     from datasets_lstm import process_loader
+    from models.lstm_classifier import LSTMClassifier
     from model_utils import (
         model_dir,
         parameter_dir,
@@ -258,7 +258,7 @@ def main(args=None):
         "epochs": args.epochs,
         "optimizer": "Adam",
         "criterion": "CrossEntropyLoss",
-        "save_model": "models/lstm/best_model.pth",
+        "save_model": "runs/lstm/best_model.pth",
     }
 
     train_loader, val_loader, test_loader, vocab = process_loader(

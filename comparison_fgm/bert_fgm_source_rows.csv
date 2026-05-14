@@ -1,0 +1,5 @@
+﻿experiment_name,run_name,finetune_strategy,unfreeze_last_n_layers,use_fgm,embedding_unfrozen,train_acc,train_f1,test_acc,test_f1,best_val_f1,test_loss,metrics_saved_at,strategy_label,use_fgm_bool,embedding_unfrozen_bool
+bert_partial_last_4,bert_partial_last_4,partial,4,False,False,0.98336,0.983319410302512,0.967,0.9666883050447976,0.9730592906246418,0.11218507565082546,2026-05-13T15:15:01,last 4 no_fgm,False,False
+bert_partial_last_8,bert_partial_last_8,partial,8,False,False,0.97498,0.9750189638108111,0.9617,0.9618169610659345,0.9718483038103282,0.14025159924566397,2026-05-13T15:59:25,last 8 no_fgm,False,False
+bert_partial_last_8_no_fgm,bert_partial_last_8_no_fgm,partial,8,False,False,0.99346,0.9934627098743156,0.9699,0.969657104755872,0.978808478151743,0.11621799422103213,2026-05-13T20:09:49,last 8 no_fgm,False,False
+bert_partial_last_8_embedding_fgm,bert_partial_last_8_embedding_fgm,partial,8,True,True,0.98638,0.9863764437880784,0.9717,0.971554357070423,0.9792844292787161,0.08913372852180619,2026-05-13T23:53:18,last 8 embedding_fgm,True,True

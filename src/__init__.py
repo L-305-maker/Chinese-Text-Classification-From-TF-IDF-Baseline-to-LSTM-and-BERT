@@ -1,0 +1,2 @@
+"""Chinese text classification package."""
+

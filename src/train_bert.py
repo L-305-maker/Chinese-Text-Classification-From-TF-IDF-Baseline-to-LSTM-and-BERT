@@ -1,22 +1,21 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from sklearn.metrics import f1_score
-from torch.optim import AdamW
-from transformers import BertModel
 import argparse
 import json
 from pathlib import Path
 import pandas as pd
-from models.bert.bert_unfreeze_last_n_layers import BertClassifier
-from src.model_utils import print_trainable_parameters,build_optimizer
 
 try:
+    from src.models.bert_classifier import BertClassifier
     from src.adversarial import FGM
     from src.datasets_bert import process_loader_bert
+    from src.utils.paths import PROJECT_ROOT, REPORTS_DIR, RUNS_DIR
     from src.model_utils import (
+        build_optimizer,
         model_dir,
         parameter_dir,
+        print_trainable_parameters,
         save_config,
         save_history,
         save_label_map,
@@ -25,11 +24,15 @@ try:
         ID2LABEL,
     )
 except ModuleNotFoundError:
+    from models.bert_classifier import BertClassifier
     from adversarial import FGM
     from datasets_bert import process_loader_bert
+    from utils.paths import PROJECT_ROOT, REPORTS_DIR, RUNS_DIR
     from model_utils import (
+        build_optimizer,
         model_dir,
         parameter_dir,
+        print_trainable_parameters,
         save_config,
         save_history,
         save_label_map,
@@ -40,7 +43,6 @@ except ModuleNotFoundError:
 
 
 MODEL_NAME = "bert"
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_PARTIAL_UNFREEZE_LAYERS = [1, 2, 4, 8, 12]
 FGM_PARTIAL_LAYERS = {4, 8}
 
@@ -344,7 +346,7 @@ def args_bert_parse(args=None):
     parser.add_argument(
         "--freeze-output-dir",
         type=str,
-        default=str(PROJECT_ROOT / "outputs"),
+        default=str(REPORTS_DIR / "bert_freeze"),
         dest="freeze_output_dir",
         help="Directory for BERT freeze summary CSV and evaluation artifacts."
     )
@@ -374,7 +376,7 @@ def args_bert_parse(args=None):
         type=str,
         default=None,
         dest="experiment_name",
-        help="Override the BERT experiment directory name under models/ and parameters/."
+        help="Override the BERT experiment directory name under runs/."
     )
     parser.add_argument(
         "--eval_batch_size",
@@ -477,7 +479,7 @@ def build_bert_config(args, model_name=MODEL_NAME):
         "epochs": args.epochs,
         "optimizer": "AdamW",
         "criterion": "CrossEntropyLoss",
-        "save_model": f"models/{model_name}/best_model.pth",
+        "save_model": f"runs/{model_name}/best_model.pth",
         "weight_decay":args.weight_decay,
         "finetune_strategy":args.finetune_strategy,
         "unfreeze_last_n_layers":args.unfreeze_last_n_layers,
@@ -531,7 +533,7 @@ def clone_args_for_strategy(args, finetune_strategy, unfreeze_last_n_layers, use
     return run_args
 
 
-def save_bert_evaluation_outputs(model_name, test_result, test_loader, output_dir):
+def save_bert_evaluation_outputs(model_name, test_result, test_loader, output_dir=None):
     try:
         from src.evaluate import (
             plot_confusion_matrix,
@@ -547,7 +549,7 @@ def save_bert_evaluation_outputs(model_name, test_result, test_loader, output_di
             save_predictions,
         )
 
-    output_dir = Path(output_dir)
+    output_dir = Path(output_dir) if output_dir is not None else model_dir(model_name) / "reports"
     labels = sorted(ID2LABEL)
     target_names = [ID2LABEL[label] for label in labels]
     texts = getattr(test_loader.dataset, "texts", None)
@@ -558,7 +560,7 @@ def save_bert_evaluation_outputs(model_name, test_result, test_loader, output_di
         model_name=model_name,
         labels=labels,
         target_names=target_names,
-        save_dir=str(output_dir / "bert_freeze_classification_reports"),
+        save_dir=str(output_dir),
     )
     plot_confusion_matrix(
         y_true=test_result["y_true"],
@@ -566,7 +568,7 @@ def save_bert_evaluation_outputs(model_name, test_result, test_loader, output_di
         model_name=model_name,
         labels=labels,
         target_names=target_names,
-        save_dir=str(output_dir / "bert_freeze_confusion_matrices"),
+        save_dir=str(output_dir),
     )
 
     if texts is not None:
@@ -576,7 +578,7 @@ def save_bert_evaluation_outputs(model_name, test_result, test_loader, output_di
             y_pred=test_result["y_pred"],
             model_name=model_name,
             probabilities=test_result["probabilities"],
-            save_dir=str(output_dir / "bert_freeze_predictions"),
+            save_dir=str(output_dir),
         )
         save_error_analysis(
             texts=texts,
@@ -584,7 +586,7 @@ def save_bert_evaluation_outputs(model_name, test_result, test_loader, output_di
             y_pred=test_result["y_pred"],
             model_name=model_name,
             probabilities=test_result["probabilities"],
-            save_dir=str(output_dir / "bert_freeze_wrong_cases"),
+            save_dir=str(output_dir),
         )
 
 
@@ -632,7 +634,7 @@ def build_freeze_summary_row(
 
 
 def load_experiment_config(experiment_name):
-    config_path = PROJECT_ROOT / "parameters" / experiment_name / "config.json"
+    config_path = RUNS_DIR / experiment_name / "config.json"
     if not config_path.exists():
         print(f"[WARNING] Config file not found: {config_path}. Falling back to CLI/default args.")
         return {}
@@ -670,7 +672,7 @@ def args_with_config_defaults(args, config):
 
 def evaluate_saved_bert_experiment(args):
     experiment_name = build_experiment_name(args)
-    checkpoint_path = PROJECT_ROOT / "models" / experiment_name / "best_model.pth"
+    checkpoint_path = RUNS_DIR / experiment_name / "best_model.pth"
     if not checkpoint_path.exists():
         raise FileNotFoundError(f"BERT checkpoint not found: {checkpoint_path}")
 
@@ -704,12 +706,10 @@ def evaluate_saved_bert_experiment(args):
         device=device,
     )
 
-    output_dir = Path(eval_args.freeze_output_dir)
     save_bert_evaluation_outputs(
         model_name=experiment_name,
         test_result=test_result,
         test_loader=test_loader,
-        output_dir=output_dir,
     )
 
     checkpoint_metrics = checkpoint.get("metrics", {})
@@ -815,6 +815,12 @@ def run_bert_experiment(
             test_loader=test_loader,
             output_dir=output_dir,
         )
+    elif save_detail_outputs:
+        save_bert_evaluation_outputs(
+            model_name=model_name,
+            test_result=test_result,
+            test_loader=test_loader,
+        )
 
     summary_row = build_freeze_summary_row(
         model_name=model_name,
@@ -866,7 +872,6 @@ def run_freeze_sweep(args):
             device=device,
             model_name=run_name,
             save_detail_outputs=True,
-            output_dir=output_dir,
         )
         rows.append(summary_row)
 
@@ -920,7 +925,6 @@ def main(args=None):
         device=device,
         model_name=build_experiment_name(args),
         save_detail_outputs=True,
-        output_dir=PROJECT_ROOT / "outputs",
     )
 
     return perf

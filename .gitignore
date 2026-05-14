@@ -1,25 +1,33 @@
-# large datasets
+# data
 data/raw/
 data/processed/
-.vscode
-.idea
 
-# model checkpoints
+# generated experiment artifacts
+/runs/
+/outputs/
+/models/
+/parameters/
 *.pt
 *.ckpt
 *.bin
 *.pth
-# cache
+*.pkl
+
+# generated reports cache
+reports/.matplotlib/
+
+# Python cache
 __pycache__/
-*.pyc
-outputs/.matplotlib/
+*.py[cod]
 
 # virtual environment
 .venv/
 venv/
 
-# logs
-logs/
+# editor settings
+.vscode/
+.idea/
 
-# system files
+# logs and system files
+logs/
 .DS_Store

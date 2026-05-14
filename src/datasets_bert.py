@@ -1,23 +1,21 @@
 import pandas as pd
-from pathlib import Path
 import torch
 from torch.utils.data import Dataset, DataLoader
 from transformers import BertTokenizer
 
 try:
     from src.data_process import build_id_map
+    from src.utils.paths import PROCESSED_DATA_DIR
 except ModuleNotFoundError:
     from data_process import build_id_map
+    from utils.paths import PROCESSED_DATA_DIR
 
 
 def load_bert_data():
 
-    current_script_dir = Path(__file__).resolve().parent
-    data_dir = current_script_dir.parent / "data" / "processed"
-
-    train_path = data_dir / "train_data.csv"
-    val_path = data_dir / "val_data.csv"
-    test_path = data_dir / "test_data.csv"
+    train_path = PROCESSED_DATA_DIR / "train_data.csv"
+    val_path = PROCESSED_DATA_DIR / "val_data.csv"
+    test_path = PROCESSED_DATA_DIR / "test_data.csv"
 
     for path in [train_path, val_path, test_path]:
         if not path.exists():

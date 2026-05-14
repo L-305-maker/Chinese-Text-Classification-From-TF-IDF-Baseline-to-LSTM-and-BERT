@@ -1,5 +1,7 @@
 # Chinese Text Classification: TF-IDF, LSTM, BERT, Freeze Sweep and FGM
 
+> 项目结构已整理：源码放在 `src/`，模型定义放在 `src/models/`，训练产物统一放在 `runs/<experiment_name>/`，汇总报告放在 `reports/`，partial 4/8 的 FGM 对比放在 `comparison_fgm/`。新的结构说明见 `docs/PROJECT_STRUCTURE.md`。
+
 本项目基于中文新闻文本分类数据集，完成从传统机器学习 baseline 到深度学习模型、预训练语言模型微调实验的完整流程。当前代码支持：
 
 - 数据预处理：原始 `cnews.*.txt` 转为统一 CSV。
@@ -443,9 +445,9 @@ bert.embeddings.*
 FGM 对比输出：
 
 ```text
-outputs/bert_fgm_comparison.csv
-outputs/bert_fgm_comparison.png
-outputs/bert_fgm_gain.png
+comparison_fgm/bert_fgm_comparison.csv
+comparison_fgm/bert_fgm_comparison.png
+comparison_fgm/bert_fgm_gain.png
 ```
 
 ---
@@ -493,9 +495,9 @@ outputs/bert_freeze_scores.png
 outputs/bert_freeze_trainable_params.png
 outputs/bert_freeze_generalization_gap.png
 outputs/bert_freeze_efficiency.png
-outputs/bert_fgm_comparison.csv
-outputs/bert_fgm_comparison.png
-outputs/bert_fgm_gain.png
+comparison_fgm/bert_fgm_comparison.csv
+comparison_fgm/bert_fgm_comparison.png
+comparison_fgm/bert_fgm_gain.png
 ```
 
 ### 11.3 同时可视化模型对比和 BERT freeze sweep
@@ -587,9 +589,9 @@ outputs/bert_freeze_efficiency.png
 FGM 对比：
 
 ```text
-outputs/bert_fgm_comparison.csv
-outputs/bert_fgm_comparison.png
-outputs/bert_fgm_gain.png
+comparison_fgm/bert_fgm_comparison.csv
+comparison_fgm/bert_fgm_comparison.png
+comparison_fgm/bert_fgm_gain.png
 ```
 
 错误分析：
@@ -641,4 +643,3 @@ main.py
 - freeze sweep 自动记录 trainable ratio 和 trainable parameters，便于分析性能与训练成本的关系。
 - Partial-4/8 + Embedding Unfrozen + FGM 提供成对对比实验，能直接观察对抗训练对测试集表现的影响。
 - 结果文件按 `models/`、`parameters/`、`outputs/` 分层保存，便于复现和分析。
-

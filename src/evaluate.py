@@ -60,7 +60,7 @@ def calculate_classification_metrics(
 def save_metrics(
     metrics: dict,
     model_name: str,
-    save_dir: str = "outputs/metrics"
+    save_dir: str = "reports/metrics"
 ):
 
     ensure_dir(save_dir)
@@ -90,7 +90,7 @@ def save_classification_report(
     model_name: str,
     labels=None,
     target_names=None,
-    save_dir: str = "outputs/metrics"
+    save_dir: str = "reports/metrics"
 ):
 
     ensure_dir(save_dir)
@@ -121,7 +121,7 @@ def plot_confusion_matrix(
     model_name: str,
     labels=None,
     target_names=None,
-    save_dir: str = "outputs/figures"
+    save_dir: str = "reports/figures"
 ):
     ensure_dir(save_dir)
 
@@ -174,7 +174,7 @@ def save_predictions(
     y_pred,
     model_name: str,
     probabilities=None,
-    save_dir: str = "outputs/predictions"
+    save_dir: str = "reports/predictions"
 ):
 
     ensure_dir(save_dir)
@@ -206,7 +206,7 @@ def save_error_analysis(
     y_pred,
     model_name: str,
     probabilities=None,
-    save_dir: str = "outputs/errors"
+    save_dir: str = "reports/errors"
 ):
     
     ensure_dir(save_dir)
@@ -313,8 +313,8 @@ def evaluate_classification_model(
 
 def merge_model_metrics(
     model_names,
-    metrics_dir: str = "outputs/metrics",
-    save_path: str = "outputs/metrics/model_comparison.csv"
+    metrics_dir: str = "reports/metrics",
+    save_path: str = "reports/metrics/model_comparison.csv"
 ):
 
     all_metrics = []
@@ -345,9 +345,9 @@ def merge_model_metrics(
 
 
 def plot_model_comparison(
-    comparison_csv: str = "outputs/metrics/model_comparison.csv",
+    comparison_csv: str = "reports/metrics/model_comparison.csv",
     metric: str = "f1",
-    save_dir: str = "outputs/figures"
+    save_dir: str = "reports/figures"
 ):
 
     if not os.path.exists(comparison_csv):

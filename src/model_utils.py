@@ -2,15 +2,20 @@ import json
 from datetime import datetime
 from pathlib import Path
 from torch.optim import AdamW
+
+try:
+    from src.utils.paths import PROJECT_ROOT, RUNS_DIR, ensure_dir
+except ModuleNotFoundError:
+    from utils.paths import PROJECT_ROOT, RUNS_DIR, ensure_dir
+
 try:
     import numpy as np
 except ImportError:  # pragma: no cover - numpy is optional for JSON conversion.
     np = None
 
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-MODELS_DIR = PROJECT_ROOT / "models"
-PARAMETERS_DIR = PROJECT_ROOT / "parameters"
+MODELS_DIR = RUNS_DIR
+PARAMETERS_DIR = RUNS_DIR
 
 LABEL2ID = {
     "体育": 0,
@@ -26,12 +31,6 @@ LABEL2ID = {
 }
 
 ID2LABEL = {idx: label for label, idx in LABEL2ID.items()}
-
-
-def ensure_dir(path):
-    path = Path(path)
-    path.mkdir(parents=True, exist_ok=True)
-    return path
 
 
 def model_dir(model_name):
@@ -218,5 +217,4 @@ def build_optimizer(
     print(f"Classifier learning rate:               {classifier_lr}")
 
     return optimizer
-
 

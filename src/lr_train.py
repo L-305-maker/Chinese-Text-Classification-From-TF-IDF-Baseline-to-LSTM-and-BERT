@@ -10,8 +10,6 @@ from sklearn.pipeline import Pipeline
 
 from src.data_process import build_id_map, data_processor
 from src.model_utils import (
-    MODELS_DIR,
-    PARAMETERS_DIR,
     LABEL2ID,
     model_dir,
     parameter_dir,
@@ -170,8 +168,8 @@ def train(sample_size=None, small_grid=False):
     save_metrics(MODEL_NAME, metrics)
 
     if sample_size is None:
-        joblib.dump(best_lg, MODELS_DIR / "log_tfidf_model.pkl")
-        save_json(grid_lg.best_params_, PARAMETERS_DIR / "best_lg_params.json")
+        joblib.dump(best_lg, model_dir(MODEL_NAME) / "log_tfidf_model.pkl")
+        save_json(grid_lg.best_params_, parameter_dir(MODEL_NAME) / "best_lg_params.json")
 
     print(f"Saved LR model to: {model_path}")
     print(f"Saved LR parameters to: {parameter_dir(MODEL_NAME)}")

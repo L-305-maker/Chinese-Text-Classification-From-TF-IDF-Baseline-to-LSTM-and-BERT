@@ -175,7 +175,7 @@ def predict_one_epoch(model, loader, criterion, device):
             logits = model(input_ids, attention_mask)
             loss = criterion(logits, labels)
 
-            probabilities = F.softmax(logits, dim=1)
+            probabilities = torch.softmax(logits, dim=1)
             confidence, preds = torch.max(probabilities, dim=1)
 
             batch_size = labels.size(0)

@@ -8,7 +8,7 @@ def parse_args():
         "--mode",
         type = str,
         required=True,
-        choices=["Log_TF_IDF","BERT","LSTM","data_processor","visualize"],
+        choices=["Log_TF_IDF", "LR", "BERT", "LSTM", "data_processor", "visualize"],
         help="choose which task to run"
     )
 
@@ -19,7 +19,7 @@ def parse_args():
 def main():
     args, remaining_args = parse_args()
     if args.mode == "data_processor":
-        from src.data_process import process_raw_to_csv
+        from src.data_processor import process_raw_to_csv
 
         process_raw_to_csv()
     elif args.mode == "BERT":
@@ -30,8 +30,8 @@ def main():
         from src.train_lstm import main as lstm_train_main
 
         lstm_train_main(remaining_args)
-    elif args.mode == "Log_TF_IDF":
-        from src.lr_train import main as lr_train_main
+    elif args.mode in {"Log_TF_IDF", "LR"}:
+        from src.train_lr import main as lr_train_main
 
         lr_train_main(remaining_args)
     elif args.mode == "visualize":

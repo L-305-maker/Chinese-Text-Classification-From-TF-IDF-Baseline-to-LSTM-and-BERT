@@ -1,0 +1,22 @@
+﻿{
+    "model_name":  "bert_partial_last_12",
+    "pretrained_model":  "bert-base-chinese",
+    "num_classes":  10,
+    "dropout":  0.3,
+    "max_len":  128,
+    "batch_size":  8,
+    "bert_lr":  2E-05,
+    "classifier_lr":  0.0001,
+    "epochs":  3,
+    "optimizer":  "AdamW",
+    "criterion":  "CrossEntropyLoss",
+    "save_model":  "checkpoints/bert_partial_last_12/best_model.pth",
+    "weight_decay":  0.01,
+    "finetune_strategy":  "partial",
+    "unfreeze_last_n_layers":  12,
+    "tokenizer_dir":  "checkpoints/bert_partial_last_12/tokenizer",
+    "total_params":  102275338,
+    "trainable_params":  85652746,
+    "trainable_ratio":  0.8374721382001201,
+    "saved_at":  "2026-05-13T15:59:28"
+}

@@ -4,17 +4,18 @@ data/processed/
 
 # generated experiment artifacts
 /runs/
-/outputs/
-/models/
+/reports/
+/comparison_fgm/
 /parameters/
+/checkpoints/
 *.pt
 *.ckpt
 *.bin
 *.pth
 *.pkl
 
-# generated reports cache
-reports/.matplotlib/
+# generated plot cache
+outputs/.matplotlib/
 
 # Python cache
 __pycache__/

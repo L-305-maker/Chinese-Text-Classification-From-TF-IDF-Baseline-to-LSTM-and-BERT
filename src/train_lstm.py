@@ -4,8 +4,8 @@ from sklearn.metrics import f1_score
 import argparse
 
 try:
-    from src.datasets_lstm import process_loader
-    from src.models.lstm_classifier import LSTMClassifier
+    from src.dataset_lstm import process_loader
+    from models.lstm_classifier import LSTMClassifier
     from src.model_utils import (
         model_dir,
         parameter_dir,
@@ -17,7 +17,7 @@ try:
         save_torch_checkpoint,
     )
 except ModuleNotFoundError:
-    from datasets_lstm import process_loader
+    from dataset_lstm import process_loader
     from models.lstm_classifier import LSTMClassifier
     from model_utils import (
         model_dir,
@@ -258,7 +258,7 @@ def main(args=None):
         "epochs": args.epochs,
         "optimizer": "Adam",
         "criterion": "CrossEntropyLoss",
-        "save_model": "runs/lstm/best_model.pth",
+        "save_model": "checkpoints/lstm/best_model.pth",
     }
 
     train_loader, val_loader, test_loader, vocab = process_loader(

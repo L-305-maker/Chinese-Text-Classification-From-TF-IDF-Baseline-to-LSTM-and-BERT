@@ -8,11 +8,12 @@ DATA_DIR = PROJECT_ROOT / "data"
 RAW_DATA_DIR = DATA_DIR / "raw"
 PROCESSED_DATA_DIR = DATA_DIR / "processed"
 
-RUNS_DIR = PROJECT_ROOT / "runs"
-REPORTS_DIR = PROJECT_ROOT / "reports"
-FIGURES_DIR = REPORTS_DIR / "figures"
-TABLES_DIR = REPORTS_DIR / "tables"
-COMPARISON_FGM_DIR = PROJECT_ROOT / "comparison_fgm"
+MODELS_DIR = PROJECT_ROOT / "models"
+CONFIGS_DIR = PROJECT_ROOT / "configs"
+CHECKPOINTS_DIR = PROJECT_ROOT / "checkpoints"
+OUTPUTS_DIR = PROJECT_ROOT / "outputs"
+COMPARISON_DIR = OUTPUTS_DIR / "comparison"
+FGM_COMPARISON_DIR = OUTPUTS_DIR / "fgm_comparison"
 
 
 def ensure_dir(path):
@@ -21,9 +22,13 @@ def ensure_dir(path):
     return path
 
 
-def run_dir(run_name):
-    return ensure_dir(RUNS_DIR / run_name)
+def config_dir(model_name):
+    return ensure_dir(CONFIGS_DIR / model_name)
 
 
-def report_dir(*parts):
-    return ensure_dir(REPORTS_DIR.joinpath(*parts))
+def checkpoint_dir(model_name):
+    return ensure_dir(CHECKPOINTS_DIR / model_name)
+
+
+def output_dir(model_name):
+    return ensure_dir(OUTPUTS_DIR / model_name)

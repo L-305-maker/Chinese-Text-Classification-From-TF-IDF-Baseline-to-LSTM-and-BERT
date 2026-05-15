@@ -1,0 +1,31 @@
+﻿{
+    "model_name":  "lr_tfidf",
+    "model_type":  "sklearn_pipeline",
+    "vectorizer":  "TfidfVectorizer",
+    "classifier":  "LogisticRegression",
+    "train_size":  20,
+    "val_size":  5000,
+    "test_size":  10000,
+    "sample_size":  20,
+    "cv":  2,
+    "random_state":  42,
+    "param_grid":  {
+                       "tfidf__max_features":  [
+                                                   5000
+                                               ],
+                       "tfidf__ngram_range":  [
+                                                  [
+                                                      1,
+                                                      2
+                                                  ]
+                                              ],
+                       "lr__C":  [
+                                     1
+                                 ],
+                       "lr__max_iter":  [
+                                            10000
+                                        ]
+                   },
+    "note":  "LR is saved as .pkl because it is not a PyTorch model.",
+    "saved_at":  "2026-05-05T21:56:06"
+}

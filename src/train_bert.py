@@ -7,10 +7,10 @@ from pathlib import Path
 import pandas as pd
 
 try:
-    from src.models.bert_classifier import BertClassifier
+    from models.bert_classifier import BertClassifier
     from src.adversarial import FGM
-    from src.datasets_bert import process_loader_bert
-    from src.utils.paths import PROJECT_ROOT, REPORTS_DIR, RUNS_DIR
+    from src.dataset_bert import process_loader_bert
+    from src.utils.paths import CHECKPOINTS_DIR, CONFIGS_DIR, OUTPUTS_DIR
     from src.model_utils import (
         build_optimizer,
         model_dir,
@@ -26,8 +26,8 @@ try:
 except ModuleNotFoundError:
     from models.bert_classifier import BertClassifier
     from adversarial import FGM
-    from datasets_bert import process_loader_bert
-    from utils.paths import PROJECT_ROOT, REPORTS_DIR, RUNS_DIR
+    from dataset_bert import process_loader_bert
+    from utils.paths import CHECKPOINTS_DIR, CONFIGS_DIR, OUTPUTS_DIR
     from model_utils import (
         build_optimizer,
         model_dir,
@@ -45,27 +45,6 @@ except ModuleNotFoundError:
 MODEL_NAME = "bert"
 DEFAULT_PARTIAL_UNFREEZE_LAYERS = [1, 2, 4, 8, 12]
 FGM_PARTIAL_LAYERS = {4, 8}
-
-
-'''class BertClassifier(nn.Module):
-    def __init__(self, model_name="bert-base-chinese", num_classes=10, dropout=0.3):
-        super().__init__()
-
-        self.bert = BertModel.from_pretrained(model_name)
-        self.dropout = nn.Dropout(dropout)
-        self.fc = nn.Linear(self.bert.config.hidden_size, num_classes)
-
-    def forward(self, input_ids, attention_mask):
-        outputs = self.bert(
-            input_ids=input_ids,
-            attention_mask=attention_mask
-        )
-
-        cls_output = outputs.last_hidden_state[:, 0, :]
-        cls_output = self.dropout(cls_output)
-        logits = self.fc(cls_output)
-
-        return logits'''
 
 
 def train_one_epoch(model, loader, optimizer, criterion, device, fgm=None):
@@ -346,7 +325,7 @@ def args_bert_parse(args=None):
     parser.add_argument(
         "--freeze-output-dir",
         type=str,
-        default=str(REPORTS_DIR / "bert_freeze"),
+        default=str(OUTPUTS_DIR / "bert_freeze"),
         dest="freeze_output_dir",
         help="Directory for BERT freeze summary CSV and evaluation artifacts."
     )
@@ -376,7 +355,7 @@ def args_bert_parse(args=None):
         type=str,
         default=None,
         dest="experiment_name",
-        help="Override the BERT experiment directory name under runs/."
+        help="Override the BERT experiment name under configs/ and checkpoints/."
     )
     parser.add_argument(
         "--eval_batch_size",
@@ -479,7 +458,7 @@ def build_bert_config(args, model_name=MODEL_NAME):
         "epochs": args.epochs,
         "optimizer": "AdamW",
         "criterion": "CrossEntropyLoss",
-        "save_model": f"runs/{model_name}/best_model.pth",
+        "save_model": f"checkpoints/{model_name}/best_model.pth",
         "weight_decay":args.weight_decay,
         "finetune_strategy":args.finetune_strategy,
         "unfreeze_last_n_layers":args.unfreeze_last_n_layers,
@@ -549,7 +528,7 @@ def save_bert_evaluation_outputs(model_name, test_result, test_loader, output_di
             save_predictions,
         )
 
-    output_dir = Path(output_dir) if output_dir is not None else model_dir(model_name) / "reports"
+    output_dir = Path(output_dir) if output_dir is not None else OUTPUTS_DIR / model_name
     labels = sorted(ID2LABEL)
     target_names = [ID2LABEL[label] for label in labels]
     texts = getattr(test_loader.dataset, "texts", None)
@@ -634,7 +613,7 @@ def build_freeze_summary_row(
 
 
 def load_experiment_config(experiment_name):
-    config_path = RUNS_DIR / experiment_name / "config.json"
+    config_path = CONFIGS_DIR / experiment_name / "config.json"
     if not config_path.exists():
         print(f"[WARNING] Config file not found: {config_path}. Falling back to CLI/default args.")
         return {}
@@ -672,7 +651,7 @@ def args_with_config_defaults(args, config):
 
 def evaluate_saved_bert_experiment(args):
     experiment_name = build_experiment_name(args)
-    checkpoint_path = RUNS_DIR / experiment_name / "best_model.pth"
+    checkpoint_path = CHECKPOINTS_DIR / experiment_name / "best_model.pth"
     if not checkpoint_path.exists():
         raise FileNotFoundError(f"BERT checkpoint not found: {checkpoint_path}")
 

@@ -5,12 +5,12 @@ from pathlib import Path
 
 
 try:
-    from src.utils.paths import COMPARISON_FGM_DIR, PROJECT_ROOT, REPORTS_DIR, RUNS_DIR
+    from src.utils.paths import COMPARISON_DIR, CONFIGS_DIR, FGM_COMPARISON_DIR, OUTPUTS_DIR
 except ModuleNotFoundError:
-    from utils.paths import COMPARISON_FGM_DIR, PROJECT_ROOT, REPORTS_DIR, RUNS_DIR
+    from utils.paths import COMPARISON_DIR, CONFIGS_DIR, FGM_COMPARISON_DIR, OUTPUTS_DIR
 
 
-MPL_CONFIG_DIR = REPORTS_DIR / ".matplotlib"
+MPL_CONFIG_DIR = OUTPUTS_DIR / ".matplotlib"
 MPL_CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 os.environ.setdefault("MPLCONFIGDIR", str(MPL_CONFIG_DIR))
 
@@ -25,7 +25,7 @@ import pandas as pd
 DEFAULT_MODELS = {
     "lr_tfidf": "TF-IDF + LR",
     "lstm": "LSTM",
-    "bert": "BERT",
+    "bert_partial_last_8_no_fgm": "BERT",
 }
 
 FGM_COMPARISON_LAYERS = [4, 8]
@@ -42,7 +42,7 @@ def load_json(path):
     if not path.exists():
         return None
 
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, "r", encoding="utf-8-sig") as f:
         return json.load(f)
 
 
@@ -420,6 +420,76 @@ def prepare_bert_freeze_summary(summary_df):
     return summary_df
 
 
+def build_bert_freeze_summary_from_configs(configs_dir=CONFIGS_DIR):
+    configs_dir = Path(configs_dir)
+    rows = []
+
+    if not configs_dir.exists():
+        raise FileNotFoundError(f"Configs directory not found: {configs_dir}")
+
+    for config_path in sorted(path for path in configs_dir.iterdir() if path.is_dir()):
+        config = load_json(config_path / "config.json")
+        metrics = load_json(config_path / "metrics.json")
+        history_payload = load_json(config_path / "history.json") or {}
+        history = history_payload.get("history", {})
+
+        if not config or not metrics:
+            continue
+        if not str(config.get("model_name", config_path.name)).startswith("bert"):
+            continue
+
+        train_acc = get_series(history, "train_acc")
+        train_f1 = get_series(history, "train_f1")
+        val_acc = get_series(history, "val_acc")
+        val_f1 = get_series(history, "val_f1")
+        val_loss = get_series(history, "val_loss")
+        best_index = None
+        if val_f1:
+            best_index = max(range(len(val_f1)), key=val_f1.__getitem__)
+
+        trainable_ratio = _metric_value(metrics, "trainable_ratio")
+        if trainable_ratio is None:
+            trainable_ratio = _metric_value(config, "trainable_ratio")
+
+        rows.append(
+            {
+                "experiment_name": config.get("model_name", config_path.name),
+                "run_name": config_path.name,
+                "finetune_strategy": config.get("finetune_strategy", "full"),
+                "unfreeze_last_n_layers": config.get("unfreeze_last_n_layers"),
+                "use_fgm": config.get("use_fgm", False),
+                "fgm_epsilon": config.get("fgm_epsilon", 1.0),
+                "embedding_unfrozen": config.get("embedding_unfrozen", False),
+                "trainable_ratio": trainable_ratio,
+                "trainable_ratio_percent": None if trainable_ratio is None else trainable_ratio * 100,
+                "trainable_params": _metric_value(metrics, "trainable_params") or _metric_value(config, "trainable_params"),
+                "total_params": _metric_value(metrics, "total_params") or _metric_value(config, "total_params"),
+                "train_acc": _metric_value(metrics, "train_acc", "train_accuracy") or last_value(train_acc),
+                "train_f1": _metric_value(metrics, "train_f1", "train_macro_f1") or last_value(train_f1),
+                "test_acc": _metric_value(metrics, "test_acc", "test_accuracy"),
+                "test_f1": _metric_value(metrics, "test_f1", "test_macro_f1"),
+                "test_loss": _metric_value(metrics, "test_loss"),
+                "best_epoch_by_val_f1": None if best_index is None else best_index + 1,
+                "best_val_loss": None if best_index is None or not val_loss else val_loss[best_index],
+                "best_val_acc": None if best_index is None or not val_acc else val_acc[best_index],
+                "best_val_f1": _metric_value(metrics, "best_val_f1") or (None if best_index is None else val_f1[best_index]),
+                "epochs": config.get("epochs"),
+                "batch_size": config.get("batch_size"),
+                "max_len": config.get("max_len"),
+                "bert_lr": config.get("bert_lr"),
+                "classifier_lr": config.get("classifier_lr"),
+                "weight_decay": config.get("weight_decay"),
+                "metrics_saved_at": metrics.get("saved_at"),
+                "history_saved_at": history_payload.get("saved_at"),
+            }
+        )
+
+    if not rows:
+        return pd.DataFrame()
+
+    return prepare_bert_freeze_summary(pd.DataFrame(rows))
+
+
 def plot_bert_freeze_scores(summary_df, output_dir):
     metrics = [
         ("train_acc", "Train Acc"),
@@ -580,16 +650,16 @@ def plot_bert_freeze_efficiency(summary_df, output_dir):
     print(f"[INFO] BERT freeze efficiency figure saved to: {save_path}")
 
 
-def build_bert_fgm_summary_from_runs(runs_dir, layers=FGM_COMPARISON_LAYERS):
-    runs_dir = Path(runs_dir)
+def build_bert_fgm_summary_from_configs(configs_dir, layers=FGM_COMPARISON_LAYERS):
+    configs_dir = Path(configs_dir)
     rows = []
 
-    if not runs_dir.exists():
-        raise FileNotFoundError(f"Runs directory not found: {runs_dir}")
+    if not configs_dir.exists():
+        raise FileNotFoundError(f"Configs directory not found: {configs_dir}")
 
-    for run_path in sorted(path for path in runs_dir.iterdir() if path.is_dir()):
-        config = load_json(run_path / "config.json")
-        metrics = load_json(run_path / "metrics.json")
+    for config_path in sorted(path for path in configs_dir.iterdir() if path.is_dir()):
+        config = load_json(config_path / "config.json")
+        metrics = load_json(config_path / "metrics.json")
         if not config or not metrics:
             continue
 
@@ -602,7 +672,7 @@ def build_bert_fgm_summary_from_runs(runs_dir, layers=FGM_COMPARISON_LAYERS):
         if unfreeze_layers not in layers:
             continue
 
-        run_name = config.get("model_name", run_path.name)
+        run_name = config.get("model_name", config_path.name)
         use_fgm = bool(config.get("use_fgm", False))
         if not use_fgm and "embedding_fgm" in run_name:
             use_fgm = True
@@ -614,7 +684,7 @@ def build_bert_fgm_summary_from_runs(runs_dir, layers=FGM_COMPARISON_LAYERS):
         rows.append(
             {
                 "experiment_name": run_name,
-                "run_name": run_path.name,
+                "run_name": config_path.name,
                 "finetune_strategy": strategy,
                 "unfreeze_last_n_layers": unfreeze_layers,
                 "use_fgm": use_fgm,
@@ -746,7 +816,7 @@ def build_bert_fgm_comparison(summary_df, output_dir, layers=FGM_COMPARISON_LAYE
 
     if missing_rows:
         pd.DataFrame(missing_rows).to_csv(missing_path, index=False, encoding="utf-8-sig")
-        print(f"[WARNING] Missing BERT FGM comparison runs saved to: {missing_path}")
+        print(f"[WARNING] Missing BERT FGM comparison configs saved to: {missing_path}")
     elif missing_path.exists():
         missing_path.unlink()
 
@@ -847,15 +917,26 @@ def plot_bert_fgm_comparison(comparison_df, output_dir):
     print(f"[INFO] BERT FGM gain figure saved to: {save_path}")
 
 
-def visualize_bert_freeze_summary(summary_csv, output_dir, comparison_fgm_dir=COMPARISON_FGM_DIR):
+def visualize_bert_freeze_summary(
+    summary_csv,
+    output_dir,
+    comparison_fgm_dir=FGM_COMPARISON_DIR,
+    include_fgm_comparison=False,
+):
     summary_csv = Path(summary_csv)
     output_dir = ensure_dir(output_dir)
     comparison_fgm_dir = ensure_dir(comparison_fgm_dir)
 
     if not summary_csv.exists():
-        raise FileNotFoundError(f"BERT freeze summary file not found: {summary_csv}")
+        summary_df = build_bert_freeze_summary_from_configs(CONFIGS_DIR)
+        if summary_df.empty:
+            raise FileNotFoundError(f"BERT freeze summary file not found: {summary_csv}")
+        generated_summary_path = output_dir / "bert_freeze_summary.csv"
+        summary_df.to_csv(generated_summary_path, index=False, encoding="utf-8-sig")
+        print(f"[INFO] BERT freeze summary rebuilt from configs: {generated_summary_path}")
+    else:
+        summary_df = pd.read_csv(summary_csv)
 
-    summary_df = pd.read_csv(summary_csv)
     if summary_df.empty:
         raise ValueError(f"BERT freeze summary file is empty: {summary_csv}")
 
@@ -866,24 +947,25 @@ def visualize_bert_freeze_summary(summary_csv, output_dir, comparison_fgm_dir=CO
     plot_bert_freeze_trainable(summary_df, output_dir)
     plot_bert_freeze_generalization_gap(summary_df, output_dir)
     plot_bert_freeze_efficiency(summary_df, output_dir)
-    fgm_comparison_df = build_bert_fgm_comparison(summary_df, comparison_fgm_dir)
-    plot_bert_fgm_comparison(fgm_comparison_df, comparison_fgm_dir)
+    if include_fgm_comparison:
+        fgm_comparison_df = build_bert_fgm_comparison(summary_df, comparison_fgm_dir)
+        plot_bert_fgm_comparison(fgm_comparison_df, comparison_fgm_dir)
 
     print("\nBERT freeze summary:")
     print(summary_df.to_string(index=False))
     return summary_df
 
 
-def visualize_bert_fgm_from_runs(runs_dir=RUNS_DIR, output_dir=COMPARISON_FGM_DIR):
+def visualize_bert_fgm_from_configs(configs_dir=CONFIGS_DIR, output_dir=FGM_COMPARISON_DIR):
     output_dir = ensure_dir(output_dir)
-    summary_df = build_bert_fgm_summary_from_runs(
-        runs_dir=runs_dir,
+    summary_df = build_bert_fgm_summary_from_configs(
+        configs_dir=configs_dir,
         layers=FGM_COMPARISON_LAYERS,
     )
 
     if summary_df.empty:
         raise FileNotFoundError(
-            f"No partial-4/8 BERT metrics were found under: {runs_dir}"
+            f"No partial-4/8 BERT metrics were found under: {configs_dir}"
         )
 
     configure_plot_style()
@@ -950,26 +1032,26 @@ def parse_args(args=None):
         "--models",
         nargs="+",
         default=list(DEFAULT_MODELS.keys()),
-        help="Model directory names under runs/.",
+        help="Model directory names under configs/.",
     )
     parser.add_argument(
         "--parameters-dir",
-        default=str(RUNS_DIR),
+        default=str(CONFIGS_DIR),
         help="Directory that stores each model's metrics.json/history.json.",
     )
     parser.add_argument(
         "--output-dir",
-        default=str(REPORTS_DIR / "model_comparison"),
+        default=str(COMPARISON_DIR),
         help="Directory to save summary files and figures.",
     )
     parser.add_argument(
         "--bert-freeze-summary",
-        default=str(REPORTS_DIR / "bert_freeze" / "bert_freeze_summary.csv"),
+        default=str(OUTPUTS_DIR / "bert_freeze" / "bert_freeze_summary.csv"),
         help="CSV generated by BERT --freeze-sweep.",
     )
     parser.add_argument(
         "--comparison-fgm-dir",
-        default=str(COMPARISON_FGM_DIR),
+        default=str(FGM_COMPARISON_DIR),
         help="Directory to save partial-4/8 with-vs-without FGM comparison data and figures.",
     )
     return parser.parse_args(args)
@@ -980,24 +1062,30 @@ def main(args=None):
     model_summary = None
     freeze_summary = None
     fgm_summary = None
+    default_comparison_dir = str(COMPARISON_DIR)
+    bert_freeze_output_dir = (
+        str(OUTPUTS_DIR / "bert_freeze")
+        if parsed_args.output_dir == default_comparison_dir
+        else parsed_args.output_dir
+    )
 
     if parsed_args.task in {"models", "both"}:
         model_summary = visualize(
             models=parsed_args.models,
             parameters_dir=parsed_args.parameters_dir,
-            output_dir=parsed_args.output_dir,
+            output_dir=COMPARISON_DIR if parsed_args.output_dir == default_comparison_dir else parsed_args.output_dir,
         )
 
     if parsed_args.task in {"bert_freeze", "both"}:
         freeze_summary = visualize_bert_freeze_summary(
             summary_csv=parsed_args.bert_freeze_summary,
-            output_dir=parsed_args.output_dir,
+            output_dir=bert_freeze_output_dir,
             comparison_fgm_dir=parsed_args.comparison_fgm_dir,
         )
 
     if parsed_args.task in {"fgm", "both"}:
-        fgm_summary = visualize_bert_fgm_from_runs(
-            runs_dir=parsed_args.parameters_dir,
+        fgm_summary = visualize_bert_fgm_from_configs(
+            configs_dir=parsed_args.parameters_dir,
             output_dir=parsed_args.comparison_fgm_dir,
         )
 

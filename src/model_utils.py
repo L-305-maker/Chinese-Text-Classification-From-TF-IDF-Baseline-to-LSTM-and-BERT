@@ -4,9 +4,9 @@ from pathlib import Path
 from torch.optim import AdamW
 
 try:
-    from src.utils.paths import PROJECT_ROOT, RUNS_DIR, ensure_dir
+    from src.utils.paths import CHECKPOINTS_DIR, CONFIGS_DIR, PROJECT_ROOT, ensure_dir
 except ModuleNotFoundError:
-    from utils.paths import PROJECT_ROOT, RUNS_DIR, ensure_dir
+    from utils.paths import CHECKPOINTS_DIR, CONFIGS_DIR, PROJECT_ROOT, ensure_dir
 
 try:
     import numpy as np
@@ -14,8 +14,9 @@ except ImportError:  # pragma: no cover - numpy is optional for JSON conversion.
     np = None
 
 
-MODELS_DIR = RUNS_DIR
-PARAMETERS_DIR = RUNS_DIR
+MODELS_DIR = PROJECT_ROOT / "models"
+CHECKPOINT_DIR = CHECKPOINTS_DIR
+CONFIG_DIR = CONFIGS_DIR
 
 LABEL2ID = {
     "体育": 0,
@@ -34,11 +35,19 @@ ID2LABEL = {idx: label for label, idx in LABEL2ID.items()}
 
 
 def model_dir(model_name):
-    return ensure_dir(MODELS_DIR / model_name)
+    return checkpoint_dir(model_name)
 
 
 def parameter_dir(model_name):
-    return ensure_dir(PARAMETERS_DIR / model_name)
+    return config_dir(model_name)
+
+
+def checkpoint_dir(model_name):
+    return ensure_dir(CHECKPOINT_DIR / model_name)
+
+
+def config_dir(model_name):
+    return ensure_dir(CONFIG_DIR / model_name)
 
 
 def now_iso():
@@ -217,4 +226,3 @@ def build_optimizer(
     print(f"Classifier learning rate:               {classifier_lr}")
 
     return optimizer
-

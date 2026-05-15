@@ -1,4 +1,12 @@
 # 配置目录
 
-这里预留给训练配置文件，例如 `bert.yaml`、`lstm.yaml` 或 `lr_tfidf.yaml`。当前训练脚本仍使用命令行参数。
+这里保存每个模型或实验的结构化结果数据，例如：
 
+- `config.json`
+- `history.json`
+- `label_map.json`
+- `metrics.json`
+- `best_params.json`
+- `vocab.json`
+
+模型权重和 tokenizer 不放在这里，而是放在 `checkpoints/`。

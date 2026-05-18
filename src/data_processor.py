@@ -50,28 +50,23 @@ def process_raw_to_csv():
         print(df["label"].value_counts())
 
 
+def load_processed_data(processed_dir=PROCESSED_DATA_DIR):
+    return tuple(
+        pd.read_csv(processed_dir / f"{split}_data.csv")
+        for split in ["train", "val", "test"]
+    )
+
+
 def data_processor():
-    test_path = PROCESSED_DATA_DIR / "test_data.csv"
-    train_path = PROCESSED_DATA_DIR / "train_data.csv"
-    val_path = PROCESSED_DATA_DIR / "val_data.csv"
-
-    test_data = pd.read_csv(test_path)
-    train_data = pd.read_csv(train_path)
-    val_data = pd.read_csv(val_path)
-
-    return train_data, val_data, test_data
+    return load_processed_data()
 
 
 def build_id_map(labels):
-    ids = []
-    for label in labels:
-        if label not in LABEL2ID:
-            expected = ", ".join(LABEL2ID.keys())
-            raise KeyError(f"Unknown label {label!r}. Expected one of: {expected}")
-        label_id = LABEL2ID[label]
-        ids.append(label_id)
-
-    return ids
+    unknown_labels = [label for label in dict.fromkeys(labels) if label not in LABEL2ID]
+    if unknown_labels:
+        expected = ", ".join(LABEL2ID.keys())
+        raise KeyError(f"Unknown labels {unknown_labels!r}. Expected one of: {expected}")
+    return [LABEL2ID[label] for label in labels]
 
 
 if __name__ == "__main__":

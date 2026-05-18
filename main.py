@@ -1,4 +1,16 @@
 import argparse
+from importlib import import_module
+
+
+ENTRYPOINTS = {
+    "Log_TF_IDF": ("src.train_lr", "main", True),
+    "LR": ("src.train_lr", "main", True),
+    "BERT": ("src.train_bert", "main", True),
+    "LSTM": ("src.train_lstm", "main", True),
+    "data_processor": ("src.data_processor", "process_raw_to_csv", False),
+    "visualize": ("src.visualize", "main", True),
+}
+
 
 def parse_args():
     parser = argparse.ArgumentParser(
@@ -6,9 +18,9 @@ def parse_args():
     )
     parser.add_argument(
         "--mode",
-        type = str,
+        type=str,
         required=True,
-        choices=["Log_TF_IDF", "LR", "BERT", "LSTM", "data_processor", "visualize"],
+        choices=list(ENTRYPOINTS),
         help="choose which task to run"
     )
 
@@ -18,27 +30,10 @@ def parse_args():
 
 def main():
     args, remaining_args = parse_args()
-    if args.mode == "data_processor":
-        from src.data_processor import process_raw_to_csv
+    module_name, function_name, accepts_args = ENTRYPOINTS[args.mode]
+    runner = getattr(import_module(module_name), function_name)
+    return runner(remaining_args) if accepts_args else runner()
 
-        process_raw_to_csv()
-    elif args.mode == "BERT":
-        from src.train_bert import main as bert_train_main
-
-        bert_train_main(remaining_args)
-    elif args.mode == "LSTM":
-        from src.train_lstm import main as lstm_train_main
-
-        lstm_train_main(remaining_args)
-    elif args.mode in {"Log_TF_IDF", "LR"}:
-        from src.train_lr import main as lr_train_main
-
-        lr_train_main(remaining_args)
-    elif args.mode == "visualize":
-        from src.visualize import main as visualize_main
-
-        visualize_main(remaining_args)
-    
 
 if __name__ == "__main__":
     main()

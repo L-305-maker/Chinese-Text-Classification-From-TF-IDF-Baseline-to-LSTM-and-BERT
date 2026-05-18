@@ -1,31 +1,30 @@
 import torch
 import torch.nn as nn
-from sklearn.metrics import f1_score
 import argparse
 
 try:
     from src.dataset_lstm import process_loader
     from models.lstm_classifier import LSTMClassifier
+    from src.training_utils import finalize_epoch_stats, init_epoch_stats, update_epoch_stats
     from src.model_utils import (
+        initialize_experiment,
         model_dir,
         parameter_dir,
-        save_config,
         save_history,
         save_json,
-        save_label_map,
         save_metrics,
         save_torch_checkpoint,
     )
 except ModuleNotFoundError:
     from dataset_lstm import process_loader
     from models.lstm_classifier import LSTMClassifier
+    from training_utils import finalize_epoch_stats, init_epoch_stats, update_epoch_stats
     from model_utils import (
+        initialize_experiment,
         model_dir,
         parameter_dir,
-        save_config,
         save_history,
         save_json,
-        save_label_map,
         save_metrics,
         save_torch_checkpoint,
     )
@@ -34,71 +33,10 @@ except ModuleNotFoundError:
 MODEL_NAME = "lstm"
 
 
-'''class LSTMClassifier(nn.Module):
-    def __init__(
-        self,
-        vocab_size,
-        embed_dim,
-        hidden_dim,
-        num_classes=10,
-        num_layers=1,
-        dropout=0.3,
-        pad_idx=0,
-        bidirectional=False,
-    ):
-        super().__init__()
-
-        self.embedding = nn.Embedding(
-            num_embeddings=vocab_size,
-            embedding_dim=embed_dim,
-            padding_idx=pad_idx
-        )
-
-        self.lstm = nn.LSTM(
-            input_size=embed_dim,
-            hidden_size=hidden_dim,
-            num_layers=num_layers,
-            batch_first=True,
-            dropout=dropout if num_layers > 1 else 0.0,
-            bidirectional=bidirectional
-        )
-
-        lstm_output_dim = hidden_dim * 2 if bidirectional else hidden_dim
-
-        self.dropout = nn.Dropout(dropout)
-        self.linear = nn.Linear(lstm_output_dim, num_classes)
-
-    def forward(self, input_ids, length):
-        x = self.embedding(input_ids)
-
-        packed = pack_padded_sequence(
-            x,
-            length.cpu(),
-            batch_first=True,
-            enforce_sorted=False
-        )
-
-        _, (hidden, _) = self.lstm(packed)
-
-        if self.lstm.bidirectional:
-            final_hidden = torch.cat((hidden[-2], hidden[-1]), dim=1)
-        else:
-            final_hidden = hidden[-1]
-
-        final_hidden = self.dropout(final_hidden)
-        logits = self.linear(final_hidden)
-        return logits'''
-
-
 def train_one_epoch(model, optimizer, criterion, loader, device):
     model.train()
 
-    train_loss = 0.0
-    train_samples = 0
-    train_correct = 0
-
-    all_label = []
-    all_pred = []
+    stats = init_epoch_stats()
 
     for input_ids, label, _, length in loader:
         input_ids = input_ids.to(device)
@@ -114,30 +52,16 @@ def train_one_epoch(model, optimizer, criterion, loader, device):
         optimizer.step()
 
         pred_label = torch.argmax(logits, dim=1)
+        update_epoch_stats(stats, loss, label, pred_label)
 
-        train_loss += loss.item() * label.size(0)
-        train_samples += label.size(0)
-        train_correct += (pred_label == label).sum().item()
-
-        all_label.extend(label.cpu().tolist())
-        all_pred.extend(pred_label.cpu().tolist())
-
-    avg_acc = train_correct / train_samples
-    avg_loss = train_loss / train_samples
-    avg_f1 = f1_score(all_label, all_pred, average="macro")
-
+    avg_loss, avg_acc, avg_f1 = finalize_epoch_stats(stats)
     return avg_acc, avg_loss, avg_f1
 
 
 def eval_one_epoch(model, criterion, loader, device):
     model.eval()
 
-    val_loss = 0.0
-    val_correct = 0
-    val_samples = 0
-
-    all_pred = []
-    all_label = []
+    stats = init_epoch_stats()
 
     with torch.no_grad():
         for input_ids, label, _, length in loader:
@@ -149,18 +73,9 @@ def eval_one_epoch(model, criterion, loader, device):
 
             loss = criterion(logits, label)
             preds = torch.argmax(logits, dim=1)
+            update_epoch_stats(stats, loss, label, preds)
 
-            val_loss += loss.item() * label.size(0)
-            val_correct += (preds == label).sum().item()
-            val_samples += label.size(0)
-
-            all_pred.extend(preds.cpu().tolist())
-            all_label.extend(label.cpu().tolist())
-
-    avg_loss = val_loss / val_samples
-    avg_acc = val_correct / val_samples
-    avg_f1 = f1_score(all_label, all_pred, average="macro")
-
+    avg_loss, avg_acc, avg_f1 = finalize_epoch_stats(stats)
     return avg_acc, avg_loss, avg_f1
 
 
@@ -174,10 +89,7 @@ def train_model(
     device,
     config,
 ):
-    model_dir(MODEL_NAME)
-    parameter_dir(MODEL_NAME)
-    save_config(MODEL_NAME, config)
-    save_label_map(MODEL_NAME)
+    initialize_experiment(MODEL_NAME, config)
 
     best_val_f1 = float("-inf")
 

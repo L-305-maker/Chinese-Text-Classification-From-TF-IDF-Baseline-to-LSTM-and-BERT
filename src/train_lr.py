@@ -1,6 +1,5 @@
 import argparse
 
-import joblib
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
@@ -11,11 +10,8 @@ from sklearn.pipeline import Pipeline
 from src.data_processor import build_id_map, data_processor
 from src.model_utils import (
     LABEL2ID,
-    model_dir,
-    parameter_dir,
-    save_config,
+    initialize_experiment,
     save_json,
-    save_label_map,
     save_metrics,
     save_sklearn_model,
 )
@@ -139,10 +135,7 @@ def train(sample_size=None, small_grid=False):
         "note": "LR is saved as .pkl because it is not a PyTorch model.",
     }
 
-    model_dir(MODEL_NAME)
-    parameter_dir(MODEL_NAME)
-    save_config(MODEL_NAME, config)
-    save_label_map(MODEL_NAME)
+    _, params_dir = initialize_experiment(MODEL_NAME, config)
 
     grid_lg = GridSearchCV(
         build_pipeline(),
@@ -164,15 +157,11 @@ def train(sample_size=None, small_grid=False):
     }
 
     model_path = save_sklearn_model(MODEL_NAME, best_lg, filename="model.pkl")
-    save_json(grid_lg.best_params_, parameter_dir(MODEL_NAME) / "best_params.json")
+    save_json(grid_lg.best_params_, params_dir / "best_params.json")
     save_metrics(MODEL_NAME, metrics)
 
-    if sample_size is None:
-        joblib.dump(best_lg, model_dir(MODEL_NAME) / "log_tfidf_model.pkl")
-        save_json(grid_lg.best_params_, parameter_dir(MODEL_NAME) / "best_lg_params.json")
-
     print(f"Saved LR model to: {model_path}")
-    print(f"Saved LR parameters to: {parameter_dir(MODEL_NAME)}")
+    print(f"Saved LR parameters to: {params_dir}")
     return metrics
 
 

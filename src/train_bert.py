@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from sklearn.metrics import f1_score
 import argparse
 import json
 from pathlib import Path
@@ -10,15 +9,14 @@ try:
     from models.bert_classifier import BertClassifier
     from src.adversarial import FGM
     from src.dataset_bert import process_loader_bert
+    from src.training_utils import finalize_epoch_stats, init_epoch_stats, update_epoch_stats
     from src.utils.paths import CHECKPOINTS_DIR, CONFIGS_DIR, OUTPUTS_DIR
     from src.model_utils import (
         build_optimizer,
+        initialize_experiment,
         model_dir,
-        parameter_dir,
         print_trainable_parameters,
-        save_config,
         save_history,
-        save_label_map,
         save_metrics,
         save_torch_checkpoint,
         ID2LABEL,
@@ -27,15 +25,14 @@ except ModuleNotFoundError:
     from models.bert_classifier import BertClassifier
     from adversarial import FGM
     from dataset_bert import process_loader_bert
+    from training_utils import finalize_epoch_stats, init_epoch_stats, update_epoch_stats
     from utils.paths import CHECKPOINTS_DIR, CONFIGS_DIR, OUTPUTS_DIR
     from model_utils import (
         build_optimizer,
+        initialize_experiment,
         model_dir,
-        parameter_dir,
         print_trainable_parameters,
-        save_config,
         save_history,
-        save_label_map,
         save_metrics,
         save_torch_checkpoint,
         ID2LABEL,
@@ -50,12 +47,7 @@ FGM_PARTIAL_LAYERS = {4, 8}
 def train_one_epoch(model, loader, optimizer, criterion, device, fgm=None):
     model.train()
 
-    total_loss = 0.0
-    total_correct = 0
-    total_samples = 0
-
-    all_preds = []
-    all_labels = []
+    stats = init_epoch_stats()
 
     for batch in loader:
         input_ids = batch["input_ids"].to(device)
@@ -82,31 +74,15 @@ def train_one_epoch(model, loader, optimizer, criterion, device, fgm=None):
         optimizer.step()
 
         preds = torch.argmax(logits, dim=1)
+        update_epoch_stats(stats, loss, labels, preds)
 
-        batch_size = labels.size(0)
-        total_loss += loss.item() * batch_size
-        total_correct += (preds == labels).sum().item()
-        total_samples += batch_size
-
-        all_preds.extend(preds.cpu().tolist())
-        all_labels.extend(labels.cpu().tolist())
-
-    avg_loss = total_loss / total_samples
-    avg_acc = total_correct / total_samples
-    avg_f1 = f1_score(all_labels, all_preds, average="macro")
-
-    return avg_loss, avg_acc, avg_f1
+    return finalize_epoch_stats(stats)
 
 
 def eval_one_epoch(model, loader, criterion, device):
     model.eval()
 
-    total_loss = 0.0
-    total_correct = 0
-    total_samples = 0
-
-    all_preds = []
-    all_labels = []
+    stats = init_epoch_stats()
 
     with torch.no_grad():
         for batch in loader:
@@ -118,31 +94,15 @@ def eval_one_epoch(model, loader, criterion, device):
             loss = criterion(logits, labels)
 
             preds = torch.argmax(logits, dim=1)
+            update_epoch_stats(stats, loss, labels, preds)
 
-            batch_size = labels.size(0)
-            total_loss += loss.item() * batch_size
-            total_correct += (preds == labels).sum().item()
-            total_samples += batch_size
-
-            all_preds.extend(preds.cpu().tolist())
-            all_labels.extend(labels.cpu().tolist())
-
-    avg_loss = total_loss / total_samples
-    avg_acc = total_correct / total_samples
-    avg_f1 = f1_score(all_labels, all_preds, average="macro")
-
-    return avg_loss, avg_acc, avg_f1
+    return finalize_epoch_stats(stats)
 
 
 def predict_one_epoch(model, loader, criterion, device):
     model.eval()
 
-    total_loss = 0.0
-    total_correct = 0
-    total_samples = 0
-
-    all_preds = []
-    all_labels = []
+    stats = init_epoch_stats()
     all_probabilities = []
 
     with torch.no_grad():
@@ -157,25 +117,17 @@ def predict_one_epoch(model, loader, criterion, device):
             probabilities = torch.softmax(logits, dim=1)
             confidence, preds = torch.max(probabilities, dim=1)
 
-            batch_size = labels.size(0)
-            total_loss += loss.item() * batch_size
-            total_correct += (preds == labels).sum().item()
-            total_samples += batch_size
-
-            all_preds.extend(preds.cpu().tolist())
-            all_labels.extend(labels.cpu().tolist())
+            update_epoch_stats(stats, loss, labels, preds)
             all_probabilities.extend(confidence.cpu().tolist())
 
-    avg_loss = total_loss / total_samples
-    avg_acc = total_correct / total_samples
-    avg_f1 = f1_score(all_labels, all_preds, average="macro")
+    avg_loss, avg_acc, avg_f1 = finalize_epoch_stats(stats)
 
     return {
         "loss": avg_loss,
         "accuracy": avg_acc,
         "macro_f1": avg_f1,
-        "y_true": all_labels,
-        "y_pred": all_preds,
+        "y_true": stats["labels"],
+        "y_pred": stats["preds"],
         "probabilities": all_probabilities,
     }
 
@@ -199,10 +151,7 @@ def train_model(
     model_name=MODEL_NAME,
     fgm=None,
 ):
-    model_dir(model_name)
-    parameter_dir(model_name)
-    save_config(model_name, config)
-    save_label_map(model_name)
+    initialize_experiment(model_name, config)
 
     best_val_f1 = float("-inf")
 
@@ -255,20 +204,6 @@ def train_model(
 
     save_history(model_name, perf)
     return perf
-
-
-def test_model(model, test_loader, criterion, device):
-    test_loss, test_acc, test_f1 = eval_one_epoch(model, test_loader, criterion, device)
-
-    print("Test Result")
-    print(f"Test Loss: {test_loss:.4f}, Test Acc: {test_acc:.4f}, Test F1: {test_f1:.4f}")
-    print("-" * 60)
-
-    return {
-        "test_loss": test_loss,
-        "test_accuracy": test_acc,
-        "test_macro_f1": test_f1,
-    }
 
 def args_bert_parse(args=None):
     parser = argparse.ArgumentParser(description="BERT model train")

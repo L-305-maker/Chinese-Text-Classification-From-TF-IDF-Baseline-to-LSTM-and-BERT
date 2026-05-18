@@ -1,35 +1,20 @@
-import pandas as pd
 import torch
 from torch.utils.data import Dataset, DataLoader
 from transformers import BertTokenizer
 
 try:
-    from src.data_processor import build_id_map
-    from src.utils.paths import PROCESSED_DATA_DIR
+    from src.data_processor import build_id_map, data_processor
 except ModuleNotFoundError:
-    from data_processor import build_id_map
-    from utils.paths import PROCESSED_DATA_DIR
+    from data_processor import build_id_map, data_processor
 
 
 def load_bert_data():
-
-    train_path = PROCESSED_DATA_DIR / "train_data.csv"
-    val_path = PROCESSED_DATA_DIR / "val_data.csv"
-    test_path = PROCESSED_DATA_DIR / "test_data.csv"
-
-    for path in [train_path, val_path, test_path]:
-        if not path.exists():
-            raise FileNotFoundError(f"找不到文件: {path}")
-
-    train_data = pd.read_csv(train_path)
-    val_data = pd.read_csv(val_path)
-    test_data = pd.read_csv(test_path)
-
+    train_data, val_data, test_data = data_processor()
     required_cols = {"text", "label"}
     for name, df in [("train", train_data), ("val", val_data), ("test", test_data)]:
         missing = required_cols - set(df.columns)
         if missing:
-            raise ValueError(f"{name}_data 缺少列: {missing}")
+            raise ValueError(f"{name}_data is missing columns: {missing}")
 
     return train_data, val_data, test_data
 

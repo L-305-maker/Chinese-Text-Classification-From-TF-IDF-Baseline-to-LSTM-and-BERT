@@ -5,9 +5,9 @@ from pathlib import Path
 
 
 try:
-    from src.utils.paths import COMPARISON_DIR, CONFIGS_DIR, FGM_COMPARISON_DIR, OUTPUTS_DIR
+    from src.utils.paths import COMPARISON_DIR, CONFIGS_DIR, FGM_COMPARISON_DIR, OUTPUTS_DIR, ensure_dir
 except ModuleNotFoundError:
-    from utils.paths import COMPARISON_DIR, CONFIGS_DIR, FGM_COMPARISON_DIR, OUTPUTS_DIR
+    from utils.paths import COMPARISON_DIR, CONFIGS_DIR, FGM_COMPARISON_DIR, OUTPUTS_DIR, ensure_dir
 
 
 MPL_CONFIG_DIR = OUTPUTS_DIR / ".matplotlib"
@@ -29,13 +29,6 @@ DEFAULT_MODELS = {
 }
 
 FGM_COMPARISON_LAYERS = [4, 8]
-
-
-def ensure_dir(path):
-    path = Path(path)
-    path.mkdir(parents=True, exist_ok=True)
-    return path
-
 
 def load_json(path):
     path = Path(path)
@@ -384,10 +377,6 @@ def _first_existing(row, keys, default=None):
 def _metric_value(row, *keys):
     value = _first_existing(row, keys)
     return None if value is None else float(value)
-
-
-def _variant_name(run_name, use_fgm):
-    return "with_fgm" if use_fgm else "without_fgm"
 
 
 def freeze_row_embedding_unfrozen(row):

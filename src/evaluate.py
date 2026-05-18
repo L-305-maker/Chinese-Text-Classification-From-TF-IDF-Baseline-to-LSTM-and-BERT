@@ -4,6 +4,11 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
+try:
+    from src.utils.paths import ensure_dir
+except ModuleNotFoundError:
+    from utils.paths import ensure_dir
+
 from sklearn.metrics import (
     accuracy_score,
     precision_score,
@@ -12,11 +17,6 @@ from sklearn.metrics import (
     classification_report,
     confusion_matrix
 )
-
-
-def ensure_dir(path: str):
-    os.makedirs(path, exist_ok=True)
-
 
 def calculate_classification_metrics(
     y_true,
@@ -388,28 +388,3 @@ def plot_model_comparison(
     plt.close()
 
     print(f"[INFO] Model comparison figure saved to: {save_path}")
-
-
-
-    sample_texts = [
-        "这部电影很好看",
-        "这个产品太差了",
-        "服务体验非常好",
-        "我再也不会买了"
-    ]
-
-    sample_y_true = [1, 0, 1, 0]
-    sample_y_pred = [1, 0, 0, 0]
-    sample_probabilities = [0.95, 0.88, 0.42, 0.91]
-
-    evaluate_classification_model(
-        y_true=sample_y_true,
-        y_pred=sample_y_pred,
-        model_name="test_model",
-        texts=sample_texts,
-        probabilities=sample_probabilities,
-        labels=[0, 1],
-        target_names=["negative", "positive"],
-        average="weighted",
-        save_outputs=True
-    )

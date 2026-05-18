@@ -25,13 +25,6 @@ def build_vocab(text):
         vocab[tokens] = len(vocab)
 
     return vocab
-
-def vocab_transmission():
-    train_data,_,_ = data_processor()
-    vocab = build_vocab(train_data["text"])
-    return vocab
-
-
 def encode(vocab,text):
     tokens = tokenize(text)
     ids = [vocab.get(token,vocab["[UNK]"]) for token in tokens]

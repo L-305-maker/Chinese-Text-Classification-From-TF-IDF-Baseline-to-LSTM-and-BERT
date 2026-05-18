@@ -1,18 +1,19 @@
 # Chinese Text Classification: TF-IDF, LSTM and BERT
 
-本项目面向中文新闻文本分类任务，覆盖从传统机器学习 baseline 到深度学习模型和预训练语言模型微调的完整实验流程。
+这个项目用于中文新闻文本分类实验，覆盖从传统机器学习 baseline 到深度学习模型、预训练模型微调和可视化分析的完整流程。
 
 当前支持：
 
-- 数据预处理：将原始 `cnews.*.txt` 转换为统一 CSV。
+- 数据预处理：将 `cnews.*.txt` 转换为统一的 CSV 文件。
 - Baseline：TF-IDF + Logistic Regression。
-- 深度学习模型：LSTM 文本分类器。
-- 预训练模型：`bert-base-chinese` 文本分类器。
-- BERT 微调策略对比：`frozen`、`partial`、`full`。
-- FGM 对抗训练对比：partial 4/8 层下对比 no FGM 与 FGM。
-- 可视化：训练曲线、模型对比、BERT 微调策略对比、FGM 影响对比。
+- 深度学习模型：基于 `jieba` 分词和 PyTorch 的 LSTM 分类器。
+- 预训练模型：基于 `bert-base-chinese` 的 BERT 文本分类器。
+- BERT 微调策略对比：`full`、`frozen`、`partial`。
+- BERT FGM 对抗训练：用于 partial 4/8 层解冻实验。
+- 实验结果保存：配置、训练历史、指标、模型权重和 tokenizer。
+- 可视化：模型对比、训练曲线、BERT 冻结策略对比、FGM 对比。
 
-## 1. 项目结构
+## 项目结构
 
 ```text
 .
@@ -20,61 +21,49 @@
 ├── requirements.txt
 ├── data/
 │   ├── raw/
+│   │   ├── cnews.train.txt
+│   │   ├── cnews.val.txt
+│   │   └── cnews.test.txt
 │   └── processed/
-├── src/
-│   ├── data_processor.py
-│   ├── dataset_bert.py
-│   ├── dataset_lstm.py
-│   ├── train_lr.py
-│   ├── train_bert.py
-│   ├── train_lstm.py
-│   ├── adversarial.py
-│   ├── evaluate.py
-│   ├── model_utils.py
-│   ├── visualize.py
-│   └── utils/
-│       └── paths.py
+│       ├── train_data.csv
+│       ├── val_data.csv
+│       └── test_data.csv
 ├── models/
 │   ├── bert_classifier.py
 │   └── lstm_classifier.py
+├── src/
+│   ├── adversarial.py
+│   ├── data_processor.py
+│   ├── dataset_bert.py
+│   ├── dataset_lstm.py
+│   ├── evaluate.py
+│   ├── model_utils.py
+│   ├── train_bert.py
+│   ├── train_lr.py
+│   ├── train_lstm.py
+│   ├── training_utils.py
+│   ├── visualize.py
+│   └── utils/
+│       └── paths.py
 ├── configs/
-│   └── <model_or_experiment>/
-│       ├── config.json
-│       ├── history.json
-│       ├── label_map.json
-│       └── metrics.json
 ├── checkpoints/
-│   └── <model_or_experiment>/
-│       ├── best_model.pth
-│       └── tokenizer/
-└── outputs/
-    ├── comparison/
-    ├── fgm_comparison/
-    ├── bert_freeze/
-    └── <model_or_experiment>/
+├── outputs/
+└── docs/
 ```
 
-目录职责：
+核心目录说明：
 
-- `data/raw/`：原始数据。
-- `data/processed/`：处理后的 CSV 数据。
-- `src/`：训练、评估、数据处理、可视化等源码。
-- `models/`：只存放模型结构定义，不存放训练权重。
-- `configs/`：保存每个模型或实验的 `config`、`history`、`metrics`、`label_map` 等 JSON 数据。
-- `checkpoints/`：保存模型权重、sklearn 模型文件、BERT tokenizer。
-- `outputs/comparison/`：保存 LR、LSTM、BERT 三类模型的对比数据和图。
-- `outputs/fgm_comparison/`：保存 FGM 与 no FGM 的对比数据和图。
-- `outputs/bert_freeze/`：保存不同 BERT 微调策略的对比图。
+- `data/raw/`：原始 CNews 文本数据，格式为 `label<TAB>text`。
+- `data/processed/`：预处理后的 CSV 数据，包含 `text` 和 `label` 两列。
+- `models/`：只存放模型结构定义。
+- `src/`：训练、评估、数据加载、可视化和公共工具代码。
+- `configs/`：保存每次实验的 `config.json`、`history.json`、`metrics.json`、`label_map.json`。
+- `checkpoints/`：保存模型权重、sklearn 模型和 BERT tokenizer。
+- `outputs/`：保存分类报告、混淆矩阵、预测结果、错误样本和对比图。
 
-更详细的结构说明见：
+## 环境安装
 
-```text
-docs/PROJECT_STRUCTURE.md
-```
-
-## 2. 环境安装
-
-建议使用 Python 3.10 或以上版本。
+建议使用 Python 3.10 或更高版本。
 
 ```bash
 conda create -n textcls python=3.10
@@ -93,30 +82,28 @@ pandas
 scikit-learn
 torch
 transformers
-argparse
 ```
 
 如果使用 GPU 训练 BERT，请根据本机 CUDA 版本安装匹配的 PyTorch。
 
-## 3. 数据准备
+## 数据准备
 
-原始数据放在：
+将原始数据放到 `data/raw/`：
 
 ```text
 data/raw/
 ├── cnews.train.txt
 ├── cnews.val.txt
-├── cnews.test.txt
-└── cnews.vocab.txt
+└── cnews.test.txt
 ```
 
-原始文本格式为：
+原始文本格式：
 
 ```text
 label<TAB>text
 ```
 
-运行预处理：
+执行预处理：
 
 ```bash
 python main.py --mode data_processor
@@ -131,15 +118,15 @@ data/processed/
 └── test_data.csv
 ```
 
-CSV 包含两列：
+当前标签映射定义在 `src/model_utils.py`，包含：
 
 ```text
-text,label
+体育、财经、娱乐、家居、房产、教育、时尚、时政、游戏、科技
 ```
 
-## 4. 统一入口
+## 统一入口
 
-根目录的 `main.py` 是项目总入口。
+所有主要任务都可以通过根目录的 `main.py` 运行：
 
 ```bash
 python main.py --mode data_processor
@@ -149,7 +136,7 @@ python main.py --mode BERT
 python main.py --mode visualize
 ```
 
-兼容旧入口：
+兼容入口：
 
 ```bash
 python main.py --mode Log_TF_IDF
@@ -161,21 +148,21 @@ python main.py --mode Log_TF_IDF
 python main.py --mode LR
 ```
 
-## 5. 训练 TF-IDF + Logistic Regression
+## 训练 TF-IDF + Logistic Regression
 
-检查数据是否可读取：
+检查 processed 数据是否可读、标签是否合法：
 
 ```bash
 python main.py --mode LR --check-data
 ```
 
-快速训练小网格：
+快速小网格训练：
 
 ```bash
 python main.py --mode LR --small-grid
 ```
 
-使用部分训练样本调试：
+使用部分样本调试：
 
 ```bash
 python main.py --mode LR --sample-size 5000 --small-grid
@@ -187,14 +174,16 @@ python main.py --mode LR --sample-size 5000 --small-grid
 python main.py --mode LR
 ```
 
-输出位置：
+常用参数：
 
 ```text
-configs/lr_tfidf/
-checkpoints/lr_tfidf/
+--check-data
+--sample-size
+--small-grid
 ```
 
-## 6. 训练 LSTM
+
+## 训练 LSTM
 
 默认训练：
 
@@ -202,7 +191,7 @@ checkpoints/lr_tfidf/
 python main.py --mode LSTM
 ```
 
-指定常用参数：
+指定参数：
 
 ```bash
 python main.py --mode LSTM --epochs 5 --batch_size 16 --embed_dim 64 --hidden_size 512
@@ -220,16 +209,10 @@ python main.py --mode LSTM --epochs 5 --batch_size 16 --embed_dim 64 --hidden_si
 --epochs
 ```
 
-输出位置：
 
-```text
-configs/lstm/
-checkpoints/lstm/
-```
+## 训练 BERT
 
-## 7. 训练 BERT
-
-默认训练 full fine-tuning：
+默认训练使用 full fine-tuning：
 
 ```bash
 python main.py --mode BERT
@@ -241,16 +224,16 @@ python main.py --mode BERT
 python main.py --mode BERT --finetune_strategy frozen
 ```
 
-全量微调：
-
-```bash
-python main.py --mode BERT --finetune_strategy full
-```
-
-部分层微调，例如只解冻最后 4 层：
+部分解冻最后 4 层：
 
 ```bash
 python main.py --mode BERT --finetune_strategy partial --unfreeze_last_n_layers 4
+```
+
+自定义学习率：
+
+```bash
+python main.py --mode BERT --bert_lr 2e-5 --classifier_lr 1e-4 --weight_decay 0.01
 ```
 
 常用参数：
@@ -260,25 +243,28 @@ python main.py --mode BERT --finetune_strategy partial --unfreeze_last_n_layers 
 --max_len
 --batch_size
 --epochs
+--finetune_strategy
+--unfreeze_last_n_layers
 --bert_lr
 --classifier_lr
 --weight_decay
---finetune_strategy
---unfreeze_last_n_layers
 --experiment_name
 ```
 
-输出位置：
+BERT 默认实验名由策略自动生成，例如：
 
 ```text
-configs/<bert_experiment_name>/
-checkpoints/<bert_experiment_name>/
-outputs/<bert_experiment_name>/
+bert_full_no_fgm
+bert_partial_last_4_no_fgm
+bert_partial_last_4_embedding_fgm
 ```
 
-## 8. BERT 微调策略实验
+也可以通过 `--experiment_name` 覆盖。
 
-运行 frozen、partial、full 的 sweep：
+
+## BERT 冻结策略对比
+
+运行 frozen、partial 和 full 的批量对比实验：
 
 ```bash
 python main.py --mode BERT --freeze-sweep
@@ -290,153 +276,190 @@ python main.py --mode BERT --freeze-sweep
 python main.py --mode BERT --freeze-sweep --partial-unfreeze-layers 1 2 4 8 12
 ```
 
-同时加入 partial 4/8 的 FGM 对比实验：
+跳过自动可视化：
 
 ```bash
-python main.py --mode BERT --freeze-sweep --use-fgm --partial-unfreeze-layers 1 2 4 8 12
+python main.py --mode BERT --freeze-sweep --skip-freeze-visualize
 ```
 
-FGM 参数：
+## BERT FGM 对抗训练
 
-```text
---use-fgm
---fgm-epsilon
+FGM 当前只支持 partial fine-tuning 且解冻层数为 4 或 8。启用 FGM 时，代码会同时解冻 BERT embedding 参数以进行扰动。
+
+示例：
+
+```bash
+python main.py --mode BERT --finetune_strategy partial --unfreeze_last_n_layers 4 --use-fgm
+python main.py --mode BERT --finetune_strategy partial --unfreeze_last_n_layers 8 --use-fgm
 ```
 
-说明：
+指定扰动强度：
 
-- FGM 目前只支持 partial fine-tuning 且解冻层数为 4 或 8。
-- 使用 FGM 时会同时解冻 embedding 层以支持对抗扰动。
+```bash
+python main.py --mode BERT --finetune_strategy partial --unfreeze_last_n_layers 4 --use-fgm --fgm-epsilon 1.0
+```
 
-## 9. 评估和可视化
+在 freeze sweep 中加入 FGM 对比：
 
-生成 LR、LSTM、BERT 三类模型对比：
+```bash
+python main.py --mode BERT --freeze-sweep --use-fgm
+```
+
+## 仅评估已保存的 BERT 实验
+
+如果已经存在 checkpoint，可以不重新训练，直接导出评估产物：
+
+```bash
+python main.py --mode BERT --eval-only --experiment-name bert_partial_last_4_no_fgm
+```
+
+可选指定评估 batch size：
+
+```bash
+python main.py --mode BERT --eval-only --experiment-name bert_partial_last_4_no_fgm --eval-batch-size 32
+```
+
+## 可视化
+
+默认对比 LR、LSTM 和 BERT：
+
+```bash
+python main.py --mode visualize
+```
+
+只生成模型对比图：
 
 ```bash
 python main.py --mode visualize --task models
 ```
 
-输出：
-
-```text
-outputs/comparison/
-├── model_metrics_summary.csv
-├── model_metrics_summary.json
-├── model_test_scores.png
-├── model_metric_heatmap.png
-├── model_test_loss.png
-├── model_generalization_gap.png
-├── training_loss_curves.png
-├── training_acc_curves.png
-└── training_f1_curves.png
-```
-
-生成 BERT 不同微调策略对比：
+只生成 BERT 冻结策略图：
 
 ```bash
 python main.py --mode visualize --task bert_freeze
 ```
 
-输出：
-
-```text
-outputs/bert_freeze/
-├── bert_freeze_summary.csv
-├── bert_freeze_scores.png
-├── bert_freeze_trainable_params.png
-├── bert_freeze_generalization_gap.png
-└── bert_freeze_efficiency.png
-```
-
-生成 partial 4/8 的 FGM 对比：
+只生成 FGM 对比图：
 
 ```bash
 python main.py --mode visualize --task fgm
 ```
 
-输出：
-
-```text
-outputs/fgm_comparison/
-├── bert_fgm_source_rows.csv
-├── bert_fgm_comparison.csv
-├── bert_fgm_comparison.png
-├── bert_fgm_gain.png
-└── bert_fgm_missing_runs.csv
-```
-
-一次性生成所有可视化：
+同时生成模型对比、BERT 冻结策略图和 FGM 对比图：
 
 ```bash
 python main.py --mode visualize --task both
 ```
 
-## 10. 结果文件说明
-
-`configs/<experiment>/config.json`：
-记录实验配置，例如 batch size、学习率、微调策略、解冻层数等。
-
-`configs/<experiment>/history.json`：
-记录多轮训练过程中的 loss、accuracy、macro F1。
-
-`configs/<experiment>/metrics.json`：
-记录测试集指标、最佳验证集指标、参数量统计等。
-
-`configs/<experiment>/label_map.json`：
-记录标签到 ID 的映射关系。
-
-`checkpoints/<experiment>/best_model.pth`：
-PyTorch 模型权重。
-
-`checkpoints/<experiment>/model.pkl`：
-sklearn 模型文件，例如 TF-IDF + LR。
-
-`outputs/<experiment>/`：
-单个模型或单个实验的 report、confusion matrix、predictions、wrong cases。
-
-## 11. 当前注意事项
-
-当前已有数据中，partial 8 的 FGM 与 no FGM 对照是完整的。
-
-partial 4 目前缺少 `bert_partial_last_4_embedding_fgm`，所以：
-
-```text
-outputs/fgm_comparison/bert_fgm_missing_runs.csv
-```
-
-会记录该缺失项。训练完 partial 4 + FGM 后，重新运行：
+指定参与对比的模型目录：
 
 ```bash
-python main.py --mode visualize --task fgm
+python main.py --mode visualize --task models --models lr_tfidf lstm bert_partial_last_8_no_fgm
 ```
 
-即可自动更新 FGM 对比图和 CSV。
-
-## 12. Git 管理建议
-
-建议提交：
+## 模块职责
 
 ```text
 main.py
-src/
-models/
-configs/README.md
-docs/
-requirements.txt
-README.md
-.gitignore
 ```
 
-通常不建议提交：
+统一命令入口，按 `--mode` 将任务分发到具体模块。
 
 ```text
-data/raw/
-data/processed/
-checkpoints/
-outputs/
-*.pth
-*.pkl
+src/data_processor.py
 ```
 
-这样可以保持仓库轻量，同时保留代码、配置说明和复现实验所需的结构。
+负责原始数据转 CSV、读取 processed 数据、标签转 ID。
 
+```text
+src/dataset_lstm.py
+```
+
+负责 LSTM 的分词、词表构建、编码、padding 和 DataLoader。
+
+```text
+src/dataset_bert.py
+```
+
+负责 BERT tokenizer、BERT Dataset 和 DataLoader。
+
+```text
+models/lstm_classifier.py
+models/bert_classifier.py
+```
+
+模型结构定义。
+
+```text
+src/train_lr.py
+src/train_lstm.py
+src/train_bert.py
+```
+
+分别负责 TF-IDF + LR、LSTM、BERT 的训练流程。
+
+```text
+src/training_utils.py
+```
+
+训练/验证 epoch 的公共指标统计工具。
+
+```text
+src/model_utils.py
+```
+
+实验初始化、配置保存、指标保存、模型保存、参数统计和优化器构建。
+
+```text
+src/evaluate.py
+```
+
+分类指标、分类报告、混淆矩阵、预测结果和错误样本保存。
+
+```text
+src/visualize.py
+```
+
+模型指标汇总、训练曲线、BERT 冻结策略对比和 FGM 对比可视化。
+
+```text
+src/utils/paths.py
+```
+
+统一维护项目路径和目录创建函数。
+
+## 推荐实验流程
+
+1. 准备原始数据到 `data/raw/`。
+2. 运行 `python main.py --mode data_processor`。
+3. 运行 `python main.py --mode LR --check-data` 检查数据。
+4. 先用 `python main.py --mode LR --small-grid` 得到 baseline。
+5. 训练 LSTM：`python main.py --mode LSTM`。
+6. 训练 BERT：`python main.py --mode BERT`。
+7. 做 BERT 策略对比：`python main.py --mode BERT --freeze-sweep`。
+8. 生成图表：`python main.py --mode visualize --task both`。
+
+## 快速自检
+
+检查 Python 文件是否能通过编译：
+
+```bash
+python -m compileall -q main.py src models
+```
+
+查看统一入口帮助：
+
+```bash
+python main.py --help
+```
+
+查看某个子任务帮助，例如：
+
+```bash
+python main.py --mode BERT --help
+python main.py --mode visualize --help
+```
+
+## 说明
+
+`.gitignore` 默认忽略数据、checkpoint、虚拟环境、缓存和部分实验产物。训练产生的大文件建议保留在本地，不建议直接提交到版本库。

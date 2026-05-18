@@ -4,9 +4,9 @@ from pathlib import Path
 from torch.optim import AdamW
 
 try:
-    from src.utils.paths import CHECKPOINTS_DIR, CONFIGS_DIR, PROJECT_ROOT, ensure_dir
+    from src.utils.paths import PROJECT_ROOT, ensure_dir, checkpoint_dir, config_dir
 except ModuleNotFoundError:
-    from utils.paths import CHECKPOINTS_DIR, CONFIGS_DIR, PROJECT_ROOT, ensure_dir
+    from utils.paths import PROJECT_ROOT, ensure_dir, checkpoint_dir, config_dir
 
 try:
     import numpy as np
@@ -15,8 +15,6 @@ except ImportError:  # pragma: no cover - numpy is optional for JSON conversion.
 
 
 MODELS_DIR = PROJECT_ROOT / "models"
-CHECKPOINT_DIR = CHECKPOINTS_DIR
-CONFIG_DIR = CONFIGS_DIR
 
 LABEL2ID = {
     "体育": 0,
@@ -40,14 +38,6 @@ def model_dir(model_name):
 
 def parameter_dir(model_name):
     return config_dir(model_name)
-
-
-def checkpoint_dir(model_name):
-    return ensure_dir(CHECKPOINT_DIR / model_name)
-
-
-def config_dir(model_name):
-    return ensure_dir(CONFIG_DIR / model_name)
 
 
 def now_iso():
@@ -93,6 +83,14 @@ def save_label_map(model_name):
         },
         path,
     )
+
+
+def initialize_experiment(model_name, config):
+    run_model_dir = model_dir(model_name)
+    run_parameter_dir = parameter_dir(model_name)
+    save_config(model_name, config)
+    save_label_map(model_name)
+    return run_model_dir, run_parameter_dir
 
 
 def save_config(model_name, config):

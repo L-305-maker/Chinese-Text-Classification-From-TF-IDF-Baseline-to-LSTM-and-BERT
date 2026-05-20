@@ -1,6 +1,6 @@
 from sklearn.metrics import f1_score
 
-
+#定义基础数据集，辅助模型
 def init_epoch_stats():
     return {
         "loss": 0.0,

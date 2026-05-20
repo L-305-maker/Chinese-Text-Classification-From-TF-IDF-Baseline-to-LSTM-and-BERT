@@ -45,6 +45,9 @@ FGM_PARTIAL_LAYERS = {4, 8}
 
 
 def train_one_epoch(model, loader, optimizer, criterion, device, fgm=None):
+
+    #进行一个epoch的训练，完成一个完整过程的前向传播与反馈调节
+
     model.train()
 
     stats = init_epoch_stats()
@@ -60,7 +63,9 @@ def train_one_epoch(model, loader, optimizer, criterion, device, fgm=None):
         loss = criterion(logits, labels)
 
         loss.backward()
+        #常规运行过程
 
+        #对抗生成训练模块
         if fgm is not None:
             attacked = fgm.attack()
             if attacked > 0:
@@ -80,6 +85,9 @@ def train_one_epoch(model, loader, optimizer, criterion, device, fgm=None):
 
 
 def eval_one_epoch(model, loader, criterion, device):
+
+    #进行一轮evaluate
+
     model.eval()
 
     stats = init_epoch_stats()
@@ -99,11 +107,12 @@ def eval_one_epoch(model, loader, criterion, device):
     return finalize_epoch_stats(stats)
 
 
-def predict_one_epoch(model, loader, criterion, device):
+def predict_one_epoch(model, loader, criterion, device, return_logits=False):
     model.eval()
 
     stats = init_epoch_stats()
     all_probabilities = []
+    all_logits = []
 
     with torch.no_grad():
         for batch in loader:
@@ -119,10 +128,12 @@ def predict_one_epoch(model, loader, criterion, device):
 
             update_epoch_stats(stats, loss, labels, preds)
             all_probabilities.extend(confidence.cpu().tolist())
+            if return_logits:
+                all_logits.append(logits.detach().cpu())
 
     avg_loss, avg_acc, avg_f1 = finalize_epoch_stats(stats)
 
-    return {
+    result = {
         "loss": avg_loss,
         "accuracy": avg_acc,
         "macro_f1": avg_f1,
@@ -130,6 +141,10 @@ def predict_one_epoch(model, loader, criterion, device):
         "y_pred": stats["preds"],
         "probabilities": all_probabilities,
     }
+    if return_logits:
+        result["logits"] = torch.cat(all_logits)
+        result["labels_tensor"] = torch.tensor(stats["labels"], dtype=torch.long)
+    return result
 
 
 def best_epoch_index(perf):
@@ -300,6 +315,19 @@ def args_bert_parse(args=None):
         dest="eval_batch_size",
         help="Batch size used only by --eval-only. Defaults to the saved training batch size."
     )
+    parser.add_argument(
+        "--calibrate",
+        action="store_true",
+        help="Run temperature scaling calibration after BERT evaluation."
+    )
+    parser.add_argument(
+        "--calibration_bins",
+        "--calibration-bins",
+        type=int,
+        default=10,
+        dest="calibration_bins",
+        help="Number of confidence bins used for ECE and reliability diagrams."
+    )
     parsed_args = parser.parse_args(args)
     if parsed_args.finetune_strategy == "partial" and parsed_args.unfreeze_last_n_layers is None:
         parsed_args.unfreeze_last_n_layers = 2
@@ -400,6 +428,8 @@ def build_bert_config(args, model_name=MODEL_NAME):
         "use_fgm": args.use_fgm,
         "fgm_epsilon": args.fgm_epsilon,
         "embedding_unfrozen": embedding_unfrozen_for_fgm(args),
+        "calibrate": args.calibrate,
+        "calibration_bins": args.calibration_bins,
     }
 
 
@@ -504,6 +534,49 @@ def save_bert_evaluation_outputs(model_name, test_result, test_loader, output_di
         )
 
 
+def calibration_metric_fields(calibration_result):
+    metric_keys = [
+        "temperature",
+        "n_bins",
+        "ece_before",
+        "ece_after",
+        "nll_before",
+        "nll_after",
+        "accuracy_before",
+        "accuracy_after",
+        "metrics_path",
+        "bins_path",
+        "figure_path",
+    ]
+    return {
+        f"calibration_{key}": calibration_result[key]
+        for key in metric_keys
+        if key in calibration_result
+    }
+
+
+def maybe_run_calibration(args, model, val_loader, test_loader, device, model_name, test_result=None):
+    if not getattr(args, "calibrate", False):
+        return {}
+
+    try:
+        from src.calibration import run_temperature_scaling_calibration
+    except ModuleNotFoundError:
+        from calibration import run_temperature_scaling_calibration
+
+    result = run_temperature_scaling_calibration(
+        model=model,
+        val_loader=val_loader,
+        test_loader=test_loader,
+        device=device,
+        model_name=model_name,
+        n_bins=args.calibration_bins,
+        test_logits=None if test_result is None else test_result.get("logits"),
+        test_labels=None if test_result is None else test_result.get("labels_tensor"),
+    )
+    return calibration_metric_fields(result)
+
+
 def build_freeze_summary_row(
     model_name,
     args,
@@ -553,7 +626,7 @@ def load_experiment_config(experiment_name):
         print(f"[WARNING] Config file not found: {config_path}. Falling back to CLI/default args.")
         return {}
 
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(config_path, "r", encoding="utf-8-sig") as f:
         return json.load(f)
 
 
@@ -594,7 +667,7 @@ def evaluate_saved_bert_experiment(args):
     eval_args = args_with_config_defaults(args, config)
     validate_fgm_args(eval_args)
 
-    _, _, test_loader, tokenizer = process_loader_bert(
+    _, val_loader, test_loader, tokenizer = process_loader_bert(
         model_name=config.get("pretrained_model", "bert-base-chinese"),
         max_len=eval_args.max_len,
         batch_size=eval_args.eval_batch_size or eval_args.batch_size,
@@ -618,12 +691,23 @@ def evaluate_saved_bert_experiment(args):
         loader=test_loader,
         criterion=criterion,
         device=device,
+        return_logits=eval_args.calibrate,
     )
 
     save_bert_evaluation_outputs(
         model_name=experiment_name,
         test_result=test_result,
         test_loader=test_loader,
+    )
+
+    calibration_metrics = maybe_run_calibration(
+        args=eval_args,
+        model=model,
+        val_loader=val_loader,
+        test_loader=test_loader,
+        device=device,
+        model_name=experiment_name,
+        test_result=test_result,
     )
 
     checkpoint_metrics = checkpoint.get("metrics", {})
@@ -635,6 +719,7 @@ def evaluate_saved_bert_experiment(args):
         "test_loss": test_result["loss"],
         "test_accuracy": test_result["accuracy"],
         "test_macro_f1": test_result["macro_f1"],
+        **calibration_metrics,
     }
     save_metrics(experiment_name, metrics)
 
@@ -694,6 +779,17 @@ def run_bert_experiment(
         loader=test_loader,
         criterion=criterion,
         device=device,
+        return_logits=args.calibrate,
+    )
+
+    calibration_metrics = maybe_run_calibration(
+        args=args,
+        model=model,
+        val_loader=val_loader,
+        test_loader=test_loader,
+        device=device,
+        model_name=model_name,
+        test_result=test_result,
     )
 
     metrics = {
@@ -705,6 +801,7 @@ def run_bert_experiment(
         "test_loss": test_result["loss"],
         "test_accuracy": test_result["accuracy"],
         "test_macro_f1": test_result["macro_f1"],
+        **calibration_metrics,
     }
     save_metrics(model_name, metrics)
 

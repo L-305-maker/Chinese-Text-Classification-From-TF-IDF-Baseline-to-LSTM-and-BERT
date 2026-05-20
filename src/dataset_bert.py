@@ -9,6 +9,8 @@ except ModuleNotFoundError:
 
 
 def load_bert_data():
+    #加载数据
+
     train_data, val_data, test_data = data_processor()
     required_cols = {"text", "label"}
     for name, df in [("train", train_data), ("val", val_data), ("test", test_data)]:
@@ -20,6 +22,8 @@ def load_bert_data():
 
 
 class BertTextDataset(Dataset):
+    #定义一个BERT专用的Dataset
+
     def __init__(self, texts, labels, tokenizer, max_len=128):
 
         self.texts = texts
@@ -42,8 +46,8 @@ class BertTextDataset(Dataset):
             return_tensors="pt"
         )
 
-        input_ids = encoded["input_ids"].squeeze(0)            # [max_len]
-        attention_mask = encoded["attention_mask"].squeeze(0)  # [max_len]
+        input_ids = encoded["input_ids"].squeeze(0)        
+        attention_mask = encoded["attention_mask"].squeeze(0)  
 
         return {
             "input_ids": input_ids,
@@ -53,9 +57,8 @@ class BertTextDataset(Dataset):
 
 
 def process_loader_bert(model_name="bert-base-chinese", max_len=256, batch_size=16):
-    """
-    构造 BERT 的 DataLoader
-    """
+    #产生loader的专用函数
+    
     train_data, val_data, test_data = load_bert_data()
 
     train_texts = train_data["text"].tolist()

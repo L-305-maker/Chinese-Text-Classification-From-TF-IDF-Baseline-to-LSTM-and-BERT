@@ -9,6 +9,8 @@ except ModuleNotFoundError:
 
 
 def process_raw_to_csv():
+    #将原.txt文件转化为.csv文件，方便模型读取
+
     source_files = [
         RAW_DATA_DIR / "cnews.test.txt",
         RAW_DATA_DIR / "cnews.train.txt",
@@ -58,10 +60,13 @@ def load_processed_data(processed_dir=PROCESSED_DATA_DIR):
 
 
 def data_processor():
+    #中转接口，本来想改的，但是太麻烦了，就留着了
     return load_processed_data()
 
 
 def build_id_map(labels):
+    #建立一个标签与数字相对应的map
+
     unknown_labels = [label for label in dict.fromkeys(labels) if label not in LABEL2ID]
     if unknown_labels:
         expected = ", ".join(LABEL2ID.keys())

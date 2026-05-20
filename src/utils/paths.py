@@ -17,6 +17,7 @@ FGM_COMPARISON_DIR = OUTPUTS_DIR / "fgm_comparison"
 
 
 def ensure_dir(path):
+    # 确保目录或文件非空
     path = Path(path)
     path.mkdir(parents=True, exist_ok=True)
     return path

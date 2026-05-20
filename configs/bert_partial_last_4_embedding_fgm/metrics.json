@@ -1,0 +1,23 @@
+{
+    "total_params": 102275338,
+    "trainable_params": 45572362,
+    "trainable_ratio": 0.44558505394526293,
+    "best_val_f1": 0.9792835509090055,
+    "best_val_acc": 0.9794,
+    "best_val_loss": 0.07192048552218476,
+    "test_loss": 0.10133215181039122,
+    "test_accuracy": 0.9703,
+    "test_macro_f1": 0.9700034101275314,
+    "calibration_temperature": 1.1642249822616577,
+    "calibration_n_bins": 10,
+    "calibration_ece_before": 0.012718010693788528,
+    "calibration_ece_after": 0.008093566633760929,
+    "calibration_nll_before": 0.10133214294910431,
+    "calibration_nll_after": 0.09568150341510773,
+    "calibration_accuracy_before": 0.970300018787384,
+    "calibration_accuracy_after": 0.970300018787384,
+    "calibration_metrics_path": "D:\\python\\Chinese Text Classification From TF-IDF Baseline to LSTM and BERT\\outputs\\calibration\\bert_partial_last_4_embedding_fgm_calibration_metrics.json",
+    "calibration_bins_path": "D:\\python\\Chinese Text Classification From TF-IDF Baseline to LSTM and BERT\\outputs\\calibration\\bert_partial_last_4_embedding_fgm_calibration_bins.csv",
+    "calibration_figure_path": "D:\\python\\Chinese Text Classification From TF-IDF Baseline to LSTM and BERT\\outputs\\calibration\\bert_partial_last_4_embedding_fgm_reliability_diagram.png",
+    "saved_at": "2026-05-19T15:51:35"
+}

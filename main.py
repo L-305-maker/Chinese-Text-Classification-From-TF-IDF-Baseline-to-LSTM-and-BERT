@@ -1,4 +1,5 @@
 import argparse
+import sys
 from importlib import import_module
 
 
@@ -12,21 +13,39 @@ ENTRYPOINTS = {
 }
 
 
-def parse_args():
+def build_parser():
     parser = argparse.ArgumentParser(
-        description="Chinese Text Classification Project"
+        description="Chinese Text Classification Project",
+        add_help=False,
     )
+    parser.add_argument("-h", "--help", action="store_true", help="show this help message and exit")
     parser.add_argument(
         "--mode",
         type=str,
-        required=True,
+        required=False,
         choices=list(ENTRYPOINTS),
         help="choose which task to run"
     )
 
-    args, remaining_args = parser.parse_known_args()
+    return parser
+
+
+def parse_args(argv=None):
+    parser = build_parser()
+    args, remaining_args = parser.parse_known_args(argv)
+
+    if args.help and args.mode is None:
+        parser.print_help()
+        sys.exit(0)
+
+    if args.mode is None:
+        parser.error("the following arguments are required: --mode")
+
+    if args.help:
+        remaining_args.insert(0, "--help")
 
     return args, remaining_args
+
 
 def main():
     args, remaining_args = parse_args()

@@ -379,6 +379,39 @@ def _metric_value(row, *keys):
     return None if value is None else float(value)
 
 
+def first_not_none(*values):
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
+def iter_bert_experiment_records(configs_dir):
+    configs_dir = Path(configs_dir)
+    if not configs_dir.exists():
+        raise FileNotFoundError(f"Configs directory not found: {configs_dir}")
+
+    for experiment_dir in sorted(path for path in configs_dir.iterdir() if path.is_dir()):
+        config = load_json(experiment_dir / "config.json")
+        metrics = load_json(experiment_dir / "metrics.json")
+        history_payload = load_json(experiment_dir / "history.json") or {}
+        if not config or not metrics:
+            continue
+
+        model_name = config.get("model_name", experiment_dir.name)
+        if not str(model_name).startswith("bert"):
+            continue
+
+        yield {
+            "experiment_dir": experiment_dir,
+            "config": config,
+            "metrics": metrics,
+            "history_payload": history_payload,
+            "history": history_payload.get("history", {}),
+            "model_name": model_name,
+        }
+
+
 def freeze_row_embedding_unfrozen(row):
     value = row.get("embedding_unfrozen", False)
     if pd.isna(value):
@@ -410,22 +443,14 @@ def prepare_bert_freeze_summary(summary_df):
 
 
 def build_bert_freeze_summary_from_configs(configs_dir=CONFIGS_DIR):
-    configs_dir = Path(configs_dir)
     rows = []
 
-    if not configs_dir.exists():
-        raise FileNotFoundError(f"Configs directory not found: {configs_dir}")
-
-    for config_path in sorted(path for path in configs_dir.iterdir() if path.is_dir()):
-        config = load_json(config_path / "config.json")
-        metrics = load_json(config_path / "metrics.json")
-        history_payload = load_json(config_path / "history.json") or {}
-        history = history_payload.get("history", {})
-
-        if not config or not metrics:
-            continue
-        if not str(config.get("model_name", config_path.name)).startswith("bert"):
-            continue
+    for record in iter_bert_experiment_records(configs_dir):
+        config = record["config"]
+        metrics = record["metrics"]
+        history_payload = record["history_payload"]
+        history = record["history"]
+        config_path = record["experiment_dir"]
 
         train_acc = get_series(history, "train_acc")
         train_f1 = get_series(history, "train_f1")
@@ -451,10 +476,22 @@ def build_bert_freeze_summary_from_configs(configs_dir=CONFIGS_DIR):
                 "embedding_unfrozen": config.get("embedding_unfrozen", False),
                 "trainable_ratio": trainable_ratio,
                 "trainable_ratio_percent": None if trainable_ratio is None else trainable_ratio * 100,
-                "trainable_params": _metric_value(metrics, "trainable_params") or _metric_value(config, "trainable_params"),
-                "total_params": _metric_value(metrics, "total_params") or _metric_value(config, "total_params"),
-                "train_acc": _metric_value(metrics, "train_acc", "train_accuracy") or last_value(train_acc),
-                "train_f1": _metric_value(metrics, "train_f1", "train_macro_f1") or last_value(train_f1),
+                "trainable_params": first_not_none(
+                    _metric_value(metrics, "trainable_params"),
+                    _metric_value(config, "trainable_params"),
+                ),
+                "total_params": first_not_none(
+                    _metric_value(metrics, "total_params"),
+                    _metric_value(config, "total_params"),
+                ),
+                "train_acc": first_not_none(
+                    _metric_value(metrics, "train_acc", "train_accuracy"),
+                    last_value(train_acc),
+                ),
+                "train_f1": first_not_none(
+                    _metric_value(metrics, "train_f1", "train_macro_f1"),
+                    last_value(train_f1),
+                ),
                 "test_acc": _metric_value(metrics, "test_acc", "test_accuracy"),
                 "test_f1": _metric_value(metrics, "test_f1", "test_macro_f1"),
                 "test_loss": _metric_value(metrics, "test_loss"),
@@ -640,18 +677,14 @@ def plot_bert_freeze_efficiency(summary_df, output_dir):
 
 
 def build_bert_fgm_summary_from_configs(configs_dir, layers=FGM_COMPARISON_LAYERS):
-    configs_dir = Path(configs_dir)
     rows = []
 
-    if not configs_dir.exists():
-        raise FileNotFoundError(f"Configs directory not found: {configs_dir}")
-
-    for config_path in sorted(path for path in configs_dir.iterdir() if path.is_dir()):
-        config = load_json(config_path / "config.json")
-        metrics = load_json(config_path / "metrics.json")
-        if not config or not metrics:
-            continue
-
+    for record in iter_bert_experiment_records(configs_dir):
+        config = record["config"]
+        metrics = record["metrics"]
+        history_payload = record["history_payload"]
+        history = record["history"]
+        config_path = record["experiment_dir"]
         strategy = config.get("finetune_strategy")
         unfreeze_layers = config.get("unfreeze_last_n_layers")
         if strategy != "partial" or unfreeze_layers is None:
@@ -678,13 +711,20 @@ def build_bert_fgm_summary_from_configs(configs_dir, layers=FGM_COMPARISON_LAYER
                 "unfreeze_last_n_layers": unfreeze_layers,
                 "use_fgm": use_fgm,
                 "embedding_unfrozen": embedding_unfrozen,
-                "train_acc": _metric_value(metrics, "train_acc", "train_accuracy"),
-                "train_f1": _metric_value(metrics, "train_f1", "train_macro_f1"),
+                "train_acc": first_not_none(
+                    _metric_value(metrics, "train_acc", "train_accuracy"),
+                    last_value(get_series(history, "train_acc")),
+                ),
+                "train_f1": first_not_none(
+                    _metric_value(metrics, "train_f1", "train_macro_f1"),
+                    last_value(get_series(history, "train_f1")),
+                ),
                 "test_acc": _metric_value(metrics, "test_acc", "test_accuracy"),
                 "test_f1": _metric_value(metrics, "test_f1", "test_macro_f1"),
                 "best_val_f1": _metric_value(metrics, "best_val_f1"),
                 "test_loss": _metric_value(metrics, "test_loss"),
                 "metrics_saved_at": metrics.get("saved_at"),
+                "history_saved_at": history_payload.get("saved_at"),
             }
         )
 

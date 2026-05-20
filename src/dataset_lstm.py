@@ -9,10 +9,12 @@ except ModuleNotFoundError:
 
 
 def tokenize(text):
+    #使用jieba切分数据
     return list(jieba.cut(text))
 
 
 def build_vocab(text):
+    #利用切分后的数据建立一个专属于这个数据集的vocab
     counter = Counter()
     vocab = {
         "[PAD]":0,
@@ -25,14 +27,16 @@ def build_vocab(text):
         vocab[tokens] = len(vocab)
 
     return vocab
+
 def encode(vocab,text):
+    #将单个token编码为ids
     tokens = tokenize(text)
     ids = [vocab.get(token,vocab["[UNK]"]) for token in tokens]
     return ids
 
 
 def collate_fn(batch):
-
+    #规定好输入模型的数据形式以及内容
     text = [item[0] for item in batch]
     label = [item[1] for item in batch]
 
@@ -59,6 +63,7 @@ def collate_fn(batch):
 
 
 class LSTMdataset(Dataset):
+    #定义一个LSTM专用Dataset
     def __init__(self,data,vocab):
         self.text = data["text"].tolist()
         self.label = build_id_map(data["label"])
@@ -75,6 +80,7 @@ class LSTMdataset(Dataset):
 
 
 def process_loader(batch_size=16):
+    #统一处理数据，产生loader
     train_data,val_data,test_data = data_processor()
 
     vocab = build_vocab(train_data["text"])

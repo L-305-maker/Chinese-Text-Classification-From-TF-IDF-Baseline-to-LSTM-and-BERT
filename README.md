@@ -16,7 +16,7 @@
 
 从结果看，三个模型的效果差距比较明显：
 
-- `TF-IDF + LR` 的 Macro F1 只有 `0.4479`，说明单纯依靠词频特征和线性分类器不太够。
+- `TF-IDF + LR` 的 Macro F1 只有 `0.4479`，说明单纯依靠词频特征和线性分类器不太够，后续需要进一步检查max_features、ngram_range、类别映射与数据预处理流程。
 - `LSTM` 的 Macro F1 达到 `0.9486`，比 LR 高很多，说明深度学习模型能学到更多文本顺序和语义信息。
 - `BERT` 的 Macro F1 达到 `0.9697`，是三个模型中最好的。
 
@@ -45,9 +45,10 @@
 可以看出：
 
 - `frozen` 只训练分类头，参数量最少，但效果也最低。
-- `full` 训练所有参数，但这次结果没有超过 partial 策略。
+- `full` 训练所有参数，但这次结果没有超过 partial 策略；可以说明全参数微调不一定带来最好的效果，Partial finetune_strategy能够再保留底层语义的同时，调整高层以适应高层新闻分类任务。
 - `partial last 8` 在不加 FGM 的情况下表现最好，Test Macro F1 为 `0.9697`。
 - 解冻层数不是越多越好，`last 12` 比 `last 8` 略低。
+- 解冻层数过少可能因为可训练参数过少而导致任务匹配性不足；但如果解冻层数过多可能会导致训练成本和过拟合风险过高。因此partial 8在训练参数中取得了比较好的平衡。
 
 对应图表：
 
@@ -59,7 +60,8 @@
 
 ## 3. 同一 BERT 模型有无 FGM 模块对比
 
-这一部分只比较 partial last 4 和 partial last 8，因为 FGM 目前只在这两组实验中使用。FGM 的作用是在 embedding 上加入小扰动，让模型训练时更鲁棒。
+这一部分只比较 partial last 4 和 partial last 8，因为 FGM 目前只在这两组实验中使用。
+由于标准 FGM 通常作用于 BERT 的 word embedding 层，而 Partial Fine-tuning 默认可能冻结 embedding，因此本项目中的 `embedding_fgm` 表示在对应 partial 策略下额外允许 word embedding 参与对抗扰动训练。
 
 | 解冻层数 | 无 FGM 实验 | 有 FGM 实验 | 无 FGM Accuracy | 有 FGM Accuracy | Accuracy 提升 | 无 FGM Macro F1 | 有 FGM Macro F1 | Macro F1 提升 |
 | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -83,6 +85,7 @@
 ## 4. 置信度与温度校准展示
 
 置信度展示使用的是实验 `bert_partial_last_4_embedding_fgm`。这里比较校准前和校准后的模型置信度情况。
+Temperature Scaling 的目标不是提升分类准确率，而是改善 softmax 概率的可靠性。因此 Accuracy 和 Macro F1 基本不变是正常现象，重点应观察 ECE 和 NLL 是否下降。
 
 | 指标 | 校准前 | 校准后 | 变化 |
 | --- | ---: | ---: | ---: |
@@ -143,3 +146,7 @@
 - 加入 FGM 后，partial last 4 和 partial last 8 都有小幅提升。
 - 温度校准不提升分类准确率，但能改善模型置信度，让预测概率更可信。
 
+## 7. 补充
+
+- 具体项目结构存储在`docs/`下的`PROJECT_STRUCTURE.md`文件里
+- 操作细则以及各项运行细节存储在`docs/`下的`OPERATION.md`文件里

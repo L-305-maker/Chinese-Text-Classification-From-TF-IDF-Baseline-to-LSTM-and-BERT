@@ -1,358 +1,525 @@
-# 操作记录
+# 项目代码运行操作指南
 
-本文档记录本次项目整理、代码精简、评估补齐、图表刷新和文档更新的主要操作。为了以后复现方便，命令尽量按实际执行顺序写。
+本文档说明本项目从环境准备、数据处理、模型训练、模型评估到可视化汇总的完整运行方式。内容以当前代码为准，主要入口来自 `main.py` 和 `src/` 下各训练、评估、可视化模块。
 
-## 0. 操作流程和命令对照
+所有命令建议在项目根目录执行：
 
-这一节是给以后复现实验用的。左边是要做的事情，右边是应该运行的命令。
+```powershell
+cd "D:\python\Chinese Text Classification From TF-IDF Baseline to LSTM and BERT"
+```
 
-### 0.1 从零开始跑项目
+## 1. 项目运行入口
 
-| 步骤 | 要做什么 | 使用命令 | 说明 |
-| --- | --- | --- | --- |
-| 1 | 安装依赖 | `pip install -r requirements.txt` | 安装 jieba、torch、transformers、sklearn 等包。 |
-| 2 | 检查主入口帮助 | `python main.py --help` | 查看项目支持哪些 `--mode`。 |
-| 3 | 预处理原始数据 | `python main.py --mode data_processor` | 把 `data/raw/cnews.*.txt` 转成 `data/processed/*.csv`。 |
-| 4 | 检查 processed 数据 | `python main.py --mode LR --check-data` | 检查 CSV 列名、标签是否合法，也会打印 train/val/test 数量。 |
-| 5 | 训练 LR baseline | `python main.py --mode LR --small-grid` | 快速跑 TF-IDF + Logistic Regression，小网格比较快。 |
-| 6 | 训练 LSTM | `python main.py --mode LSTM` | 训练 LSTM 模型，保存 history、metrics 和 checkpoint。 |
-| 7 | 训练默认 BERT | `python main.py --mode BERT` | 默认是 full fine-tuning。CPU 会比较慢。 |
-| 8 | 刷新总图表 | `python main.py --mode visualize --task both --bert-freeze-summary outputs\bert_freeze\_rebuild_from_configs.csv` | 生成 comparison、bert_freeze、fgm_comparison 下的图和 CSV。 |
+项目统一入口是：
 
-### 0.2 `main.py --mode` 命令对应关系
+```powershell
+python main.py --mode <任务名> [任务参数]
+```
 
-| 命令 | 对应操作 | 主要输入 | 主要输出 |
-| --- | --- | --- | --- |
-| `python main.py --mode data_processor` | 数据预处理 | `data/raw/cnews.train.txt`、`cnews.val.txt`、`cnews.test.txt` | `data/processed/train_data.csv`、`val_data.csv`、`test_data.csv` |
-| `python main.py --mode LR --check-data` | 检查数据是否合法 | `data/processed/*.csv` | 终端打印检查结果 |
-| `python main.py --mode LR --small-grid` | 快速训练 LR baseline | `data/processed/*.csv` | `configs/lr_tfidf/metrics.json`、`checkpoints/lr_tfidf/model.pkl` |
-| `python main.py --mode LR` | 完整训练 LR baseline | `data/processed/*.csv` | `configs/lr_tfidf/`、`checkpoints/lr_tfidf/` |
-| `python main.py --mode LSTM` | 训练 LSTM | `data/processed/*.csv` | `configs/lstm/`、`checkpoints/lstm/best_model.pth` |
-| `python main.py --mode BERT` | 训练默认 BERT | `data/processed/*.csv` | `configs/bert_full_no_fgm/`、`checkpoints/bert_full_no_fgm/`、`outputs/bert_full_no_fgm/` |
-| `python main.py --mode visualize --task models` | 生成 LR、LSTM、BERT 总体对比图 | `configs/lr_tfidf`、`configs/lstm`、`configs/bert_partial_last_8_no_fgm` | `outputs/comparison/` |
-| `python main.py --mode visualize --task bert_freeze` | 生成 BERT 冻结策略图 | `outputs/bert_freeze/bert_freeze_summary.csv` 或 `configs/` | `outputs/bert_freeze/` |
-| `python main.py --mode visualize --task fgm` | 生成 FGM 对比图 | `configs/bert_partial_last_4/8_*` | `outputs/fgm_comparison/` |
-| `python main.py --mode visualize --task both` | 同时刷新 models 和 bert_freeze | `configs/` | `outputs/comparison/`、`outputs/bert_freeze/` |
+`main.py` 会根据 `--mode` 把命令转发给对应模块。
 
-### 0.3 BERT 常用命令
-
-| 要做什么 | 使用命令 | 说明 |
+| `--mode` | 对应代码 | 作用 |
 | --- | --- | --- |
-| 查看 BERT 参数 | `python main.py --mode BERT --help` | 会显示 BERT 子模块参数。 |
-| full fine-tuning | `python main.py --mode BERT --finetune_strategy full` | 训练全部 BERT 参数。 |
-| frozen BERT | `python main.py --mode BERT --finetune_strategy frozen` | 只训练分类头。 |
-| partial last 4 | `python main.py --mode BERT --finetune_strategy partial --unfreeze_last_n_layers 4` | 只解冻最后 4 层。 |
-| partial last 8 | `python main.py --mode BERT --finetune_strategy partial --unfreeze_last_n_layers 8` | 只解冻最后 8 层。 |
-| partial last 4 + FGM | `python main.py --mode BERT --finetune_strategy partial --unfreeze_last_n_layers 4 --use-fgm` | 解冻最后 4 层和 embedding，并加入 FGM。 |
-| partial last 8 + FGM | `python main.py --mode BERT --finetune_strategy partial --unfreeze_last_n_layers 8 --use-fgm` | 解冻最后 8 层和 embedding，并加入 FGM。 |
-| 冻结策略批量实验 | `python main.py --mode BERT --freeze-sweep` | 批量跑 frozen、partial、full。 |
-| 冻结策略 + FGM 批量实验 | `python main.py --mode BERT --freeze-sweep --use-fgm` | 会把 partial last 4/8 的 FGM 一起加入 sweep。 |
-| 只评估已有 checkpoint | `python main.py --mode BERT --eval-only --experiment-name bert_partial_last_4_embedding_fgm` | 不训练，只读取已有 `best_model.pth` 生成评估结果。 |
-| CPU 上加大评估 batch | `python main.py --mode BERT --eval-only --experiment-name bert_partial_last_4_embedding_fgm --eval-batch-size 32` | 只影响 eval-only 的 batch size。 |
-| 评估并做温度校准 | `python main.py --mode BERT --eval-only --experiment-name bert_partial_last_4_embedding_fgm --eval-batch-size 32 --calibrate` | 同时生成 metrics、报告、错例、校准指标和可靠性图。 |
-
-### 0.4 可视化命令
-
-| 要生成什么 | 使用命令 | 输出目录 |
-| --- | --- | --- |
-| 三个模型总览图 | `python main.py --mode visualize --task models` | `outputs/comparison/` |
-| BERT 冻结策略图 | `python main.py --mode visualize --task bert_freeze` | `outputs/bert_freeze/` |
-| 从 configs 重建 BERT 冻结策略图 | `python main.py --mode visualize --task bert_freeze --bert-freeze-summary outputs\bert_freeze\_rebuild_from_configs.csv` | `outputs/bert_freeze/` |
-| FGM 对比图 | `python main.py --mode visualize --task fgm` | `outputs/fgm_comparison/` |
-| 一次性刷新全部常用图 | `python main.py --mode visualize --task both --bert-freeze-summary outputs\bert_freeze\_rebuild_from_configs.csv` | `outputs/comparison/`、`outputs/bert_freeze/`、`outputs/fgm_comparison/` |
-
-### 0.5 本次补齐缺失结果的实际流程
-
-| 顺序 | 操作 | 实际运行命令 | 结果 |
-| --- | --- | --- | --- |
-| 1 | 编译检查 | `python -m compileall -q main.py src models` | 检查 Python 语法是否正常。 |
-| 2 | 检查数据 | `python main.py --mode LR --check-data` | 确认 train=50000、val=5000、test=10000。 |
-| 3 | 补评估 partial last 4 FGM | `python main.py --mode BERT --eval-only --experiment-name bert_partial_last_4_embedding_fgm --eval-batch-size 32 --calibrate` | 生成 `metrics.json`、分类报告、混淆矩阵、预测、错例、校准图。 |
-| 4 | 刷新所有图表 | `python main.py --mode visualize --task both --bert-freeze-summary outputs\bert_freeze\_rebuild_from_configs.csv` | 刷新 comparison、bert_freeze、fgm_comparison。 |
-| 5 | 单独确认 FGM 对比 | `python main.py --mode visualize --task fgm` | 确认 partial last 4/8 的 with/without FGM 都齐了。 |
-| 6 | 检查缺失文件是否还在 | `Test-Path outputs\fgm_comparison\bert_fgm_missing_runs.csv` | 返回 `False`，表示没有缺失项。 |
-
-## 1. 初始检查
-
-先查看项目结构和 Git 状态：
-
-```bash
-git status --short
-Get-ChildItem -Force
-Get-ChildItem -Recurse -File
-```
-
-## 2. 接入和精简 calibration.py
-
-对 `src/calibration.py` 做了重写和精简，保留下面几类功能：
-
-- 收集 BERT 输出 logits。
-- 拟合 temperature scaling。
-- 计算 ECE、NLL、accuracy。
-- 保存校准指标 JSON。
-- 保存校准分箱 CSV。
-- 生成 reliability diagram。
-
-相关输出位置：
-
-```text
-outputs/calibration/
-|- <experiment>_calibration_metrics.json
-|- <experiment>_calibration_bins.csv
-`- <experiment>_reliability_diagram.png
-```
-
-## 3. 修改 BERT 训练和评估链路
-
-修改了 `src/train_bert.py`：
-
-- 新增 `--calibrate` 参数。
-- 新增 `--calibration-bins` / `--calibration_bins` 参数。
-- 在正常训练后的测试评估中接入 calibration。
-- 在 `--eval-only` 评估中接入 calibration。
-- 让 `predict_one_epoch()` 可以选择返回 logits，避免校准时重复跑完整 test set。
-- 修复读取带 BOM 的 `config.json` 时报错的问题，将读取编码改为 `utf-8-sig`。
-
-关键命令：
-
-```bash
-python main.py --mode BERT --eval-only --experiment-name bert_partial_last_4_embedding_fgm --eval-batch-size 32 --calibrate
-```
-
-这条命令只读取已有 checkpoint，不重新训练模型。
-
-## 4. 补齐 partial last 4 FGM 评估
-
-补齐的实验名：
-
-```text
-bert_partial_last_4_embedding_fgm
-```
-
-生成或更新的文件：
-
-```text
-configs/bert_partial_last_4_embedding_fgm/metrics.json
-
-outputs/bert_partial_last_4_embedding_fgm/
-|- bert_partial_last_4_embedding_fgm_classification_report.txt
-|- bert_partial_last_4_embedding_fgm_confusion_matrix.png
-|- bert_partial_last_4_embedding_fgm_predictions.csv
-`- bert_partial_last_4_embedding_fgm_wrong_cases.csv
-
-outputs/calibration/
-|- bert_partial_last_4_embedding_fgm_calibration_metrics.json
-|- bert_partial_last_4_embedding_fgm_calibration_bins.csv
-`- bert_partial_last_4_embedding_fgm_reliability_diagram.png
-```
-
-评估结果：
-
-```text
-Test accuracy  = 0.9703
-Test macro F1  = 0.970003
-Test loss      = 0.101332
-Wrong cases    = 297
-```
-
-温度校准结果：
-
-```text
-temperature = 1.164225
-ECE before  = 0.012718
-ECE after   = 0.008094
-NLL before  = 0.101332
-NLL after   = 0.095682
-```
-
-## 5. 刷新图表和汇总文件
-
-运行：
-
-```bash
-python main.py --mode visualize --task both --bert-freeze-summary outputs\bert_freeze\_rebuild_from_configs.csv
-python main.py --mode visualize --task fgm
-```
-
-刷新了下面这些目录：
-
-```text
-outputs/comparison/
-outputs/bert_freeze/
-outputs/fgm_comparison/
-```
-
-FGM 对比刷新后：
-
-```text
-partial last 4:
-no FGM macro F1 = 0.966688
-FGM macro F1    = 0.970003
-delta           = +0.003315
-
-partial last 8:
-no FGM macro F1 = 0.969657
-FGM macro F1    = 0.971554
-delta           = +0.001897
-```
-
-确认缺失标记文件已经不存在：
-
-```bash
-Test-Path outputs\fgm_comparison\bert_fgm_missing_runs.csv
-```
-
-结果为：
-
-```text
-False
-```
-
-## 6. 精简 evaluate.py
-
-修改 `src/evaluate.py`，删除旧的、当前主链路不用的函数：
-
-- `calculate_classification_metrics`
-- `save_metrics`
-- `evaluate_classification_model`
-- `merge_model_metrics`
-- `plot_model_comparison`
-
-保留当前仍然使用的函数：
-
-- `save_classification_report`
-- `plot_confusion_matrix`
-- `save_predictions`
-- `save_error_analysis`
-
-精简后，`evaluate.py` 从约 390 行减少到约 165 行。
-
-## 7. 合并 visualize.py 中重复逻辑
-
-修改 `src/visualize.py`：
-
-- 新增 `iter_bert_experiment_records()`，统一读取 `configs/` 下的 BERT 实验记录。
-- `build_bert_freeze_summary_from_configs()` 和 `build_bert_fgm_summary_from_configs()` 共用这套读取逻辑。
-- 新增 `first_not_none()`，避免原来用 `or` 回填指标时把合法的 `0` 当成空值。
-
-这样可以减少 freeze summary 和 FGM summary 两条路径之间的重复代码。
-
-## 8. 修复 main.py 的 help 转发
-
-发现问题：
-
-```bash
-python main.py --mode BERT --help
-```
-
-原来只会显示 `main.py` 的总帮助，不会显示 BERT 子模块参数。
-
-修复 `main.py` 后，现在可以正确显示子模块帮助：
-
-```bash
-python main.py --mode BERT --help
-python main.py --mode visualize --help
-```
-
-## 9. README 重写
-
-重写了根目录 `README.md`。
-
-第一次重写偏正式项目文档；后来按要求改成更像大一学生写的实验说明，主要特点是：
-
-- 语气更简单。
-- 少用正式工程化表达。
-- 增加“我对结果的简单理解”。
-- 直接写当前实验结果。
-- 保留必要运行命令。
-
-## 10. STRUCTURE 文档更新
-
-更新了：
-
-```text
-docs/PROJECT_STRUCTURE.md
-```
-
-新增生成：
-
-```text
-docs/PROJECT_STRUCTURE.docx
-```
-
-内容包括：
-
-- 项目目录结构。
-- 入口和模块职责。
-- BERT、FGM、calibration 的产物流向。
-- partial last 4 FGM 补齐后的结果。
-
-DOCX 生成后做过结构检查：
-
-```text
-paragraphs = 61
-tables     = 4
-sections   = 1
-headings   = 8
-```
-
-尝试用 LibreOffice 渲染 DOCX 为 PNG 时失败，原因是本机没有 `soffice`。之后尝试通过 `winget` 安装 LibreOffice，但安装器哈希不匹配，所以没有完成 PNG 视觉检查。
-
-## 11. 已执行的验证命令
-
-语法编译：
-
-```bash
-python -m compileall -q main.py src models
-```
-
-查看入口帮助：
-
-```bash
+| `data_processor` | `src.data_processor.process_raw_to_csv()` | 将 `data/raw/` 下的 CNews 原始 txt 文件转成 CSV |
+| `LR` | `src.train_lr.main()` | 训练或检查 `TF-IDF + Logistic Regression` baseline |
+| `Log_TF_IDF` | `src.train_lr.main()` | `LR` 的别名，功能完全相同 |
+| `LSTM` | `src.train_lstm.main()` | 训练 LSTM 文本分类模型 |
+| `BERT` | `src.train_bert.main()` | 训练 BERT、做冻结策略实验、评估已有 checkpoint、做温度校准 |
+| `visualize` | `src.visualize.main()` | 根据 `configs/` 中的指标生成汇总文件和图表 |
+
+查看总入口帮助：
+
+```powershell
 python main.py --help
+```
+
+查看某个子任务的参数：
+
+```powershell
 python main.py --mode BERT --help
 python main.py --mode visualize --help
 ```
 
-检查数据：
+## 2. 环境准备
 
-```bash
+### 2.1 安装依赖
+
+```powershell
+pip install -r requirements.txt
+```
+
+`requirements.txt` 中的依赖及用途如下。
+
+| 依赖 | 项目中的用途 |
+| --- | --- |
+| `jieba` | LR 和 LSTM 的中文分词 |
+| `joblib` | 保存 sklearn 模型 |
+| `matplotlib` | 绘制混淆矩阵、模型对比图、校准图 |
+| `numpy` | 数值计算 |
+| `pandas` | 读取和保存 CSV、汇总指标 |
+| `scikit-learn` | TF-IDF、Logistic Regression、GridSearchCV、classification report |
+| `torch` | LSTM 和 BERT 的训练、评估、checkpoint 保存 |
+| `transformers` | 加载 `bert-base-chinese` tokenizer 和 BERT 模型 |
+
+BERT 使用的预训练模型名称写在代码中：
+
+```text
+bert-base-chinese
+```
+
+首次运行 BERT 时，`transformers` 需要能读取本机缓存，或者能联网下载该模型。
+
+### 2.2 目录约定
+
+路径由 `src/utils/paths.py` 统一管理。
+
+| 目录 | 作用 |
+| --- | --- |
+| `data/raw/` | 原始 CNews txt 数据 |
+| `data/processed/` | 预处理后的 CSV 数据 |
+| `configs/` | 每个实验的配置、指标、训练历史、标签映射 |
+| `checkpoints/` | 模型权重、LR 模型文件、BERT tokenizer |
+| `outputs/` | 分类报告、预测结果、错例、图表和校准结果 |
+
+## 3. 数据处理
+
+### 3.1 原始数据格式
+
+项目读取以下原始文件：
+
+```text
+data/raw/cnews.train.txt
+data/raw/cnews.val.txt
+data/raw/cnews.test.txt
+```
+
+每行格式必须是：
+
+```text
+标签<TAB>正文
+```
+
+代码中支持的标签来自 `src/model_utils.py`：
+
+```text
+体育、财经、娱乐、家居、房产、教育、时尚、时政、游戏、科技
+```
+
+### 3.2 生成 processed CSV
+
+```powershell
+python main.py --mode data_processor
+```
+
+这个命令没有额外参数。
+
+作用：
+
+| 输入 | 输出 |
+| --- | --- |
+| `data/raw/cnews.train.txt` | `data/processed/train_data.csv` |
+| `data/raw/cnews.val.txt` | `data/processed/val_data.csv` |
+| `data/raw/cnews.test.txt` | `data/processed/test_data.csv` |
+
+处理规则：
+
+- 空行会跳过。
+- 不满足 `标签<TAB>正文` 格式的行会跳过。
+- 输出 CSV 包含 `text` 和 `label` 两列。
+- 输出编码为 `utf-8-sig`，便于表格软件打开中文。
+- 运行时会打印每个 split 的前几行和标签分布。
+
+### 3.3 检查 processed 数据
+
+```powershell
 python main.py --mode LR --check-data
 ```
 
-数据检查结果：
+作用：
+
+- 检查 `train_data.csv`、`val_data.csv`、`test_data.csv` 是否存在。
+- 检查是否包含 `text`、`label` 两列。
+- 检查 label 是否都属于项目支持的 10 个类别。
+- 打印 train、val、test 的样本数量。
+
+该命令只检查数据，不训练模型。
+
+## 4. 推荐运行流程
+
+### 4.1 从零开始完整运行
+
+```powershell
+pip install -r requirements.txt
+python main.py --mode data_processor
+python main.py --mode LR --check-data
+python main.py --mode LR --small-grid
+python main.py --mode LSTM
+python main.py --mode BERT --finetune_strategy partial --unfreeze_last_n_layers 8
+python main.py --mode visualize --task both
+```
+
+### 4.2 快速验证代码链路
+
+```powershell
+python main.py --mode data_processor
+python main.py --mode LR --check-data
+python main.py --mode LR --sample-size 1000 --small-grid
+python main.py --mode LSTM --epochs 1
+```
+
+BERT 训练耗时较长，建议先确认数据和 LR/LSTM 链路能跑通，再执行 BERT 训练。
+
+## 5. LR / TF-IDF Baseline
+
+命令格式：
+
+```powershell
+python main.py --mode LR [参数]
+```
+
+等价写法：
+
+```powershell
+python main.py --mode Log_TF_IDF [参数]
+```
+
+### 5.1 参数说明
+
+| 参数 | 类型 | 默认值 | 作用 |
+| --- | --- | --- | --- |
+| `--sample-size` | `int` | `None` | 从训练集抽样指定数量样本训练，适合快速调试；代码会尽量按类别均衡抽样 |
+| `--small-grid` | flag | 关闭 | 使用小搜索网格，只跑一组参数，速度更快 |
+| `--check-data` | flag | 关闭 | 只检查 processed 数据，不训练模型 |
+
+### 5.2 训练逻辑
+
+代码位置：
 
 ```text
-Data check passed.
-train=50000, val=5000, test=10000
+src/train_lr.py
 ```
 
-刷新图表：
+运行流程：
 
-```bash
-python main.py --mode visualize --task both --bert-freeze-summary outputs\bert_freeze\_rebuild_from_configs.csv
-python main.py --mode visualize --task fgm
+1. 调用 `data_processor()` 读取 `data/processed/*.csv`。
+2. 使用 `jieba.lcut()` 对中文文本分词。
+3. 构建 sklearn `Pipeline`：`TfidfVectorizer` + `LogisticRegression`。
+4. 使用 `GridSearchCV` 搜索参数。
+5. 在测试集计算 `test_accuracy` 和 `test_macro_f1`。
+6. 保存模型、最佳参数和指标。
+
+默认模型配置：
+
+| 组件 | 关键配置 |
+| --- | --- |
+| `TfidfVectorizer` | `max_features=5000`、`min_df=2`、`ngram_range=(1, 2)` |
+| `LogisticRegression` | `solver="saga"`、`max_iter=10000`、`random_state=42` |
+| `GridSearchCV` | 默认最多 5 折；如果样本少，会根据最少类别样本数自动减少折数 |
+
+完整搜索网格：
+
+| 参数 | 候选值 |
+| --- | --- |
+| `tfidf__max_features` | `5000`、`10000` |
+| `tfidf__ngram_range` | `(1, 2)`、`(1, 3)` |
+| `lr__C` | `0.01`、`0.1`、`1`、`10`、`100` |
+| `lr__max_iter` | `10000`、`50000` |
+
+`--small-grid` 搜索网格：
+
+| 参数 | 候选值 |
+| --- | --- |
+| `tfidf__max_features` | `5000` |
+| `tfidf__ngram_range` | `(1, 2)` |
+| `lr__C` | `1` |
+| `lr__max_iter` | `10000` |
+
+### 5.3 常用命令
+
+| 目标 | 命令 |
+| --- | --- |
+| 检查数据 | `python main.py --mode LR --check-data` |
+| 快速训练 | `python main.py --mode LR --small-grid` |
+| 抽样 1000 条快速训练 | `python main.py --mode LR --sample-size 1000 --small-grid` |
+| 完整网格训练 | `python main.py --mode LR` |
+
+### 5.4 输出产物
+
+| 文件 | 内容 |
+| --- | --- |
+| `checkpoints/lr_tfidf/model.pkl` | 保存后的 sklearn pipeline |
+| `configs/lr_tfidf/config.json` | 训练配置和参数网格 |
+| `configs/lr_tfidf/best_params.json` | GridSearchCV 最佳参数 |
+| `configs/lr_tfidf/metrics.json` | 测试集指标和交叉验证指标 |
+| `configs/lr_tfidf/label_map.json` | 标签映射 |
+
+## 6. LSTM 模型
+
+命令格式：
+
+```powershell
+python main.py --mode LSTM [参数]
 ```
 
-补齐 BERT partial last 4 FGM 评估：
+### 6.1 参数说明
 
-```bash
-python main.py --mode BERT --eval-only --experiment-name bert_partial_last_4_embedding_fgm --eval-batch-size 32 --calibrate
+| 参数 | 类型 | 默认值 | 作用 |
+| --- | --- | --- | --- |
+| `--embed_dim` | `int` | `64` | 词向量维度 |
+| `--hidden_size` | `int` | `512` | LSTM hidden state 维度 |
+| `--num_layers` | `int` | `1` | LSTM 层数 |
+| `--dropout` | `float` | `0.3` | dropout 比例；当 `num_layers=1` 时，LSTM 内部 dropout 为 `0.0`，分类头前仍使用 dropout |
+| `--batch_size` | `int` | `16` | DataLoader batch size |
+| `--learning_rate` | `float` | `0.001` | Adam 优化器学习率 |
+| `--epochs` | `int` | `5` | 训练轮数 |
+
+### 6.2 训练逻辑
+
+相关代码：
+
+```text
+src/train_lstm.py
+src/dataset_lstm.py
+models/lstm_classifier.py
 ```
 
-## 12. 当前仍然存在的说明
+运行流程：
 
-`bert_full_no_fgm` 当前有 `metrics.json`，但是没有完整的 `history.json`，所以在 BERT freeze summary 中 train 相关字段是空的。
+1. 读取 `data/processed/*.csv`。
+2. 使用 `jieba.cut()` 对训练文本分词。
+3. 根据训练集构建词表，保留 `[PAD]=0`、`[UNK]=1`。
+4. `collate_fn()` 会对每个 batch 动态 padding 到当前 batch 的最长文本长度。
+5. 模型结构为 `Embedding -> LSTM -> Dropout -> Linear`。
+6. 每个 epoch 训练后在验证集计算 loss、accuracy、macro F1。
+7. 按验证集 macro F1 保存 `best_model.pth`。
+8. 训练结束后加载最佳 checkpoint，在测试集评估。
 
-这个缺口不能只靠 `eval-only` 补齐，因为 `history.json` 是训练过程中按 epoch 记录的。如果要补齐，需要重新训练 full BERT：
+### 6.3 常用命令
 
-```bash
-python main.py --mode BERT --finetune_strategy full
+| 目标 | 命令 |
+| --- | --- |
+| 默认训练 | `python main.py --mode LSTM` |
+| 只跑 1 个 epoch 调试 | `python main.py --mode LSTM --epochs 1` |
+| 调整 batch size | `python main.py --mode LSTM --batch_size 32` |
+| 调整词向量和 hidden 维度 | `python main.py --mode LSTM --embed_dim 128 --hidden_size 256` |
+| 使用两层 LSTM | `python main.py --mode LSTM --num_layers 2 --dropout 0.3` |
+
+### 6.4 输出产物
+
+| 文件 | 内容 |
+| --- | --- |
+| `checkpoints/lstm/best_model.pth` | 验证集 macro F1 最优的 PyTorch checkpoint |
+| `configs/lstm/config.json` | 模型结构和训练参数 |
+| `configs/lstm/history.json` | 每个 epoch 的 train/val 指标 |
+| `configs/lstm/metrics.json` | best val F1 和测试集指标 |
+| `configs/lstm/vocab.json` | 训练集词表 |
+| `configs/lstm/label_map.json` | 标签映射 |
+
+## 7. BERT 模型
+
+命令格式：
+
+```powershell
+python main.py --mode BERT [参数]
 ```
 
-但是当前机器没有 CUDA，CPU 上重新训练 BERT 会很慢，所以这次没有重新训练 full BERT。
+BERT 入口支持普通训练、冻结策略批量实验、FGM 对抗训练、已有 checkpoint 评估和温度校准。
 
-## 13. 当前主要结果文件
+### 7.1 基础训练参数
+
+| 参数 | 类型 | 默认值 | 作用 |
+| --- | --- | --- | --- |
+| `--dropout` | `float` | `0.3` | BERT `[CLS]` 表示进入分类头前的 dropout |
+| `--max_len` | `int` | `256` | tokenizer 最大序列长度，超出截断，不足 padding |
+| `--batch_size` | `int` | `16` | 训练、验证、测试 batch size |
+| `--epochs` | `int` | `5` | 训练轮数 |
+| `--bert_lr` | `float` | `2e-5` | BERT backbone 参数学习率 |
+| `--classifier_lr` | `float` | `1e-4` | 分类头参数学习率 |
+| `--weight_decay` | `float` | `0.01` | AdamW weight decay |
+
+### 7.2 微调策略参数
+
+| 参数 | 类型/可选值 | 默认值 | 作用 |
+| --- | --- | --- | --- |
+| `--finetune_strategy` | `full`、`frozen`、`partial` | `full` | 控制 BERT 哪些参数参与训练 |
+| `--unfreeze_last_n_layers` | `int` | `None` | 当策略为 `partial` 时，解冻最后 N 层 encoder；如果不传，代码会设为 `2` |
+
+策略含义：
+
+| 策略 | 训练参数 | 默认实验名 |
+| --- | --- | --- |
+| `full` | 全部 BERT 参数 + 分类头 | `bert_full_no_fgm` |
+| `frozen` | 只训练分类头 | `bert_frozen_no_fgm` |
+| `partial` | 解冻最后 N 层 encoder、pooler 和分类头 | `bert_partial_last_<N>_no_fgm` |
+
+说明：
+
+- 实验名由 `build_experiment_name()` 自动生成。
+- 如果传入 `--experiment-name`，会覆盖自动实验名。
+- checkpoint、config、output 都会以实验名作为目录名。
+
+### 7.3 FGM 参数
+
+| 参数 | 类型 | 默认值 | 作用 |
+| --- | --- | --- | --- |
+| `--use_fgm`、`--use-fgm` | flag | 关闭 | 启用 FGM 对抗训练 |
+| `--fgm_epsilon`、`--fgm-epsilon` | `float` | `1.0` | FGM 扰动强度 |
+
+FGM 使用限制：
+
+- 必须使用 `--finetune_strategy partial`。
+- `--unfreeze_last_n_layers` 只能是 `4` 或 `8`。
+- 启用 FGM 时，代码会额外解冻 `bert.embeddings.*`。
+
+合法示例：
+
+```powershell
+python main.py --mode BERT --finetune_strategy partial --unfreeze_last_n_layers 4 --use-fgm
+python main.py --mode BERT --finetune_strategy partial --unfreeze_last_n_layers 8 --use-fgm
+```
+
+非法示例：
+
+```powershell
+python main.py --mode BERT --finetune_strategy full --use-fgm
+python main.py --mode BERT --finetune_strategy partial --unfreeze_last_n_layers 2 --use-fgm
+```
+
+### 7.4 freeze sweep 参数
+
+| 参数 | 类型 | 默认值 | 作用 |
+| --- | --- | --- | --- |
+| `--freeze-sweep` | flag | 关闭 | 批量运行 frozen、partial、full 多种微调策略 |
+| `--partial_unfreeze_layers`、`--partial-unfreeze-layers` | `int` 列表 | `1 2 4 8 12` | sweep 中 partial 策略要测试的解冻层数 |
+| `--freeze-output-dir` | `str` | `outputs/bert_freeze` | 保存 freeze summary 和图表的目录 |
+| `--freeze-summary-filename` | `str` | `bert_freeze_summary.csv` | freeze summary 的文件名 |
+| `--skip-freeze-visualize` | flag | 关闭 | 只保存 summary CSV，不自动画 freeze 图 |
+
+sweep 规则：
+
+- 默认运行 `frozen`、`partial last 1/2/4/8/12`、`full`。
+- 如果同时加 `--use-fgm`，会对 partial last 4 和 partial last 8 增加 FGM 实验。
+- 每个实验会单独保存到 `configs/<experiment>/`、`checkpoints/<experiment>/`、`outputs/<experiment>/`。
+
+### 7.5 eval-only 与校准参数
+
+| 参数 | 类型 | 默认值 | 作用 |
+| --- | --- | --- | --- |
+| `--eval_only`、`--eval-only` | flag | 关闭 | 只加载已有 checkpoint 做评估，不重新训练 |
+| `--experiment_name`、`--experiment-name` | `str` | `None` | 指定实验名，对应 `configs/<name>/` 和 `checkpoints/<name>/` |
+| `--eval_batch_size`、`--eval-batch-size` | `int` | `None` | 只用于 `--eval-only`；不传则使用保存配置里的 batch size |
+| `--calibrate` | flag | 关闭 | BERT 评估后执行 temperature scaling 校准 |
+| `--calibration_bins`、`--calibration-bins` | `int` | `10` | ECE 和 reliability diagram 的分箱数量 |
+
+`--eval-only` 依赖以下文件：
+
+```text
+checkpoints/<experiment>/best_model.pth
+configs/<experiment>/config.json
+```
+
+开启 `--calibrate` 后，代码会：
+
+1. 在验证集上收集 logits 并拟合 temperature。
+2. 在测试集上计算校准前后的 NLL、ECE、accuracy。
+3. 保存校准指标、校准分箱 CSV 和可靠性图。
+
+### 7.6 BERT 常用命令
+
+| 目标 | 命令 |
+| --- | --- |
+| 查看 BERT 帮助 | `python main.py --mode BERT --help` |
+| full fine-tuning | `python main.py --mode BERT --finetune_strategy full` |
+| frozen BERT | `python main.py --mode BERT --finetune_strategy frozen` |
+| partial last 4 | `python main.py --mode BERT --finetune_strategy partial --unfreeze_last_n_layers 4` |
+| partial last 8 | `python main.py --mode BERT --finetune_strategy partial --unfreeze_last_n_layers 8` |
+| partial last 4 + FGM | `python main.py --mode BERT --finetune_strategy partial --unfreeze_last_n_layers 4 --use-fgm` |
+| partial last 8 + FGM | `python main.py --mode BERT --finetune_strategy partial --unfreeze_last_n_layers 8 --use-fgm` |
+| 指定实验名训练 | `python main.py --mode BERT --finetune_strategy partial --unfreeze_last_n_layers 8 --experiment-name bert_partial_last_8_trial_001` |
+| 运行 freeze sweep | `python main.py --mode BERT --freeze-sweep` |
+| freeze sweep 加 FGM | `python main.py --mode BERT --freeze-sweep --use-fgm` |
+| 自定义 sweep 层数 | `python main.py --mode BERT --freeze-sweep --partial-unfreeze-layers 2 4 8` |
+| 只评估已有模型 | `python main.py --mode BERT --eval-only --experiment-name bert_partial_last_8_no_fgm` |
+| 评估时调整 batch | `python main.py --mode BERT --eval-only --experiment-name bert_partial_last_8_no_fgm --eval-batch-size 32` |
+| 评估并做温度校准 | `python main.py --mode BERT --eval-only --experiment-name bert_partial_last_4_embedding_fgm --eval-batch-size 32 --calibrate` |
+| 调整校准分箱 | `python main.py --mode BERT --eval-only --experiment-name bert_partial_last_4_embedding_fgm --calibrate --calibration-bins 15` |
+
+### 7.7 BERT 输出产物
+
+普通训练或 `--eval-only` 的主要输出：
+
+| 文件 | 内容 |
+| --- | --- |
+| `checkpoints/<experiment>/best_model.pth` | 最优 PyTorch checkpoint |
+| `checkpoints/<experiment>/tokenizer/` | 保存后的 tokenizer |
+| `configs/<experiment>/config.json` | 训练配置 |
+| `configs/<experiment>/history.json` | 训练历史；`--eval-only` 不生成新的训练历史 |
+| `configs/<experiment>/metrics.json` | 参数量、best val 指标、test 指标、可选校准指标 |
+| `configs/<experiment>/label_map.json` | 标签映射 |
+| `outputs/<experiment>/<experiment>_classification_report.txt` | 分类报告 |
+| `outputs/<experiment>/<experiment>_confusion_matrix.png` | 混淆矩阵 |
+| `outputs/<experiment>/<experiment>_predictions.csv` | 测试集预测结果 |
+| `outputs/<experiment>/<experiment>_wrong_cases.csv` | 测试集错例 |
+
+温度校准输出：
+
+| 文件 | 内容 |
+| --- | --- |
+| `outputs/calibration/<experiment>_calibration_metrics.json` | temperature、ECE、NLL、accuracy |
+| `outputs/calibration/<experiment>_calibration_bins.csv` | 每个置信度分箱的数量、准确率、置信度 |
+| `outputs/calibration/<experiment>_reliability_diagram.png` | reliability diagram |
+
+freeze sweep 输出：
+
+| 文件 | 内容 |
+| --- | --- |
+| `outputs/bert_freeze/bert_freeze_summary.csv` | freeze sweep 汇总表 |
+| `outputs/bert_freeze/bert_freeze_scores.png` | 不同冻结策略测试集分数对比 |
+| `outputs/bert_freeze/bert_freeze_trainable_params.png` | 可训练参数量对比 |
+| `outputs/bert_freeze/bert_freeze_generalization_gap.png` | 泛化差距图 |
+| `outputs/bert_freeze/bert_freeze_efficiency.png` | 参数效率图 |
+
+## 8. 可视化和结果汇总
+
+命令格式：
+
+```powershell
+python main.py --mode visualize [参数]
+```
+
+### 8.1 参数说明
+
+| 参数 | 类型/可选值 | 默认值 | 作用 |
+| --- | --- | --- | --- |
+| `--task` | `models`、`bert_freeze`、`fgm`、`both` | `models` | 选择可视化任务 |
+| `--models` | 目录名列表 | `lr_tfidf lstm bert_partial_last_8_no_fgm` | 指定参与普通模型对比的 `configs/` 子目录 |
+| `--parameters-dir` | `str` | `configs` | 指标文件根目录 |
+| `--output-dir` | `str` | `outputs/comparison` | 普通模型对比图输出目录 |
+| `--bert-freeze-summary` | `str` | `outputs/bert_freeze/bert_freeze_summary.csv` | BERT freeze summary CSV 路径 |
+| `--comparison-fgm-dir` | `str` | `outputs/fgm_comparison` | FGM 对比输出目录 |
+
+### 8.2 task 说明
+
+| `--task` | 读取内容 | 输出内容 |
+| --- | --- | --- |
+| `models` | `configs/<model>/metrics.json` 和可选 `history.json` | 模型总体对比表和图 |
+| `bert_freeze` | `outputs/bert_freeze/bert_freeze_summary.csv`；如果不存在，会尝试从 `configs/` 重建 | BERT 冻结策略对比图 |
+| `fgm` | `configs/bert_partial_last_4_*`、`configs/bert_partial_last_8_*` | partial last 4/8 有无 FGM 对比 |
+| `both` | 上面三类都读取 | 一次性刷新常用汇总图 |
+
+### 8.3 常用命令
+
+| 目标 | 命令 |
+| --- | --- |
+| 默认模型总览 | `python main.py --mode visualize --task models` |
+| 指定模型对比 | `python main.py --mode visualize --task models --models lr_tfidf lstm bert_partial_last_8_embedding_fgm` |
+| BERT freeze 图 | `python main.py --mode visualize --task bert_freeze` |
+| 指定 freeze summary | `python main.py --mode visualize --task bert_freeze --bert-freeze-summary outputs\bert_freeze\bert_freeze_summary.csv` |
+| FGM 对比图 | `python main.py --mode visualize --task fgm` |
+| 一次性刷新常用图 | `python main.py --mode visualize --task both` |
+| 输出到自定义目录 | `python main.py --mode visualize --task models --output-dir outputs\my_comparison` |
+
+### 8.4 输出产物
 
 普通模型对比：
 
@@ -368,7 +535,7 @@ outputs/comparison/training_acc_curves.png
 outputs/comparison/training_f1_curves.png
 ```
 
-BERT 冻结策略：
+BERT freeze 对比：
 
 ```text
 outputs/bert_freeze/bert_freeze_summary.csv
@@ -387,10 +554,120 @@ outputs/fgm_comparison/bert_fgm_comparison.png
 outputs/fgm_comparison/bert_fgm_gain.png
 ```
 
-校准结果：
+## 9. 工程化运行建议
+
+### 9.1 固定项目根目录
+
+所有命令都建议在项目根目录执行。虽然代码通过 `Path(__file__)` 推导项目根目录，但固定工作目录可以减少命令、日志和相对路径混乱。
+
+### 9.2 使用实验名隔离 BERT 结果
+
+LR 和 LSTM 的实验名固定：
 
 ```text
-outputs/calibration/bert_partial_last_4_embedding_fgm_calibration_metrics.json
-outputs/calibration/bert_partial_last_4_embedding_fgm_calibration_bins.csv
-outputs/calibration/bert_partial_last_4_embedding_fgm_reliability_diagram.png
+lr_tfidf
+lstm
 ```
+
+重复运行会覆盖原目录下的配置、指标和 checkpoint。
+
+BERT 支持指定实验名：
+
+```powershell
+python main.py --mode BERT --finetune_strategy partial --unfreeze_last_n_layers 8 --experiment-name bert_partial_last_8_trial_001
+```
+
+建议正式实验都加 `--experiment-name`，避免覆盖已有结果。
+
+### 9.3 先验证数据，再跑深度模型
+
+推荐顺序：
+
+```powershell
+python main.py --mode LR --check-data
+python main.py --mode LR --sample-size 1000 --small-grid
+python main.py --mode LSTM --epochs 1
+```
+
+数据、标签和基础链路都正常后，再运行 BERT。
+
+### 9.4 CPU 和 GPU
+
+LSTM 和 BERT 会自动选择设备：
+
+```python
+torch.device("cuda" if torch.cuda.is_available() else "cpu")
+```
+
+没有 CUDA 时，BERT 训练会比较慢。已有 checkpoint 的场景下，优先用 `--eval-only` 补评估、补图表。
+
+### 9.5 结果完整性检查
+
+训练或评估完成后，可以运行：
+
+```powershell
+python main.py --mode visualize --task both
+```
+
+如果该命令正常生成图表，通常说明 `configs/` 中的 `metrics.json`、`history.json` 和目录结构基本可用。
+
+## 10. 常见问题
+
+### 10.1 忘记传 `--mode`
+
+现象：
+
+```text
+error: the following arguments are required: --mode
+```
+
+处理：
+
+```powershell
+python main.py --help
+```
+
+从支持的 mode 中选择一个任务。
+
+### 10.2 BERT eval-only 找不到 checkpoint
+
+现象：
+
+```text
+BERT checkpoint not found: checkpoints/<experiment>/best_model.pth
+```
+
+处理：
+
+- 检查 `--experiment-name` 是否写对。
+- 检查 `checkpoints/<experiment>/best_model.pth` 是否存在。
+- 如果没有 checkpoint，需要先训练该实验。
+
+### 10.3 FGM 参数组合不合法
+
+FGM 只支持：
+
+```powershell
+python main.py --mode BERT --finetune_strategy partial --unfreeze_last_n_layers 4 --use-fgm
+python main.py --mode BERT --finetune_strategy partial --unfreeze_last_n_layers 8 --use-fgm
+```
+
+不要与 `full`、`frozen` 或 partial last 1/2/12 一起使用。
+
+### 10.4 visualize 提示 metrics 缺失
+
+现象：
+
+```text
+[WARNING] Metrics file not found
+```
+
+处理：
+
+- 检查 `configs/<model>/metrics.json` 是否存在。
+- 对缺失模型先运行训练或 BERT `--eval-only`。
+- `--models` 参数传的是 `configs/` 下的目录名，不是图中的展示名。
+
+### 10.5 CSV 中文乱码
+
+项目输出 CSV 多数使用 `utf-8-sig`。如果表格软件仍然乱码，建议使用 VS Code、PyCharm 或其他明确支持 UTF-8 的工具打开。

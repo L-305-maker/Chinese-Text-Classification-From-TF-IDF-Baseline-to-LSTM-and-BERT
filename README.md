@@ -49,7 +49,7 @@
 - `partial last 8` 在不加 FGM 的情况下表现最好，Test Macro F1 为 `0.9697`。
 - 解冻层数不是越多越好，`last 12` 比 `last 8` 略低。
 - 解冻层数过少可能因为可训练参数过少而导致任务匹配性不足；但如果解冻层数过多可能会导致训练成本和过拟合风险过高。因此partial 8在训练参数中取得了比较好的平衡。
-
+- CNews 训练集约 5 万条，BERT-base 有 1.1 亿参数，参数/样本比超过 2000:1。full 微调时所有参数都在更新，模型容量远超数据能支撑的范围，导致过拟合——训练集 loss 持续下降但验证集 F1 不再提升甚至回落。partial last 8 只解冻 56% 的参数，底层预训练表示被保留，相当于隐式正则化.
 对应图表：
 
 - `outputs/bert_freeze/bert_freeze_scores.png`
@@ -79,6 +79,8 @@
 
 - `outputs/fgm_comparison/bert_fgm_comparison.png`
 - `outputs/fgm_comparison/bert_fgm_gain.png`
+
+FGM 的收益来自强迫模型抵抗对抗扰动，当任务本身已经足够简单（baseline F1=0.97），模型不需要对边界样本做精细区分就能达到很高的准确率，对抗训练的边际收益有限.
 
 ![BERT FGM 对比](outputs/fgm_comparison/bert_fgm_comparison.png)
 

@@ -28,6 +28,7 @@ venv/
 # editor settings
 .vscode/
 .idea/
+.codex/
 
 # logs and system files
 logs/

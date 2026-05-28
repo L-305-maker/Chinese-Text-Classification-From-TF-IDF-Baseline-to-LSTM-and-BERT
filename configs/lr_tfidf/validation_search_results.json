@@ -1,0 +1,218 @@
+[
+    {
+        "candidate": 1,
+        "params": {
+            "lr__estimator__C": 8,
+            "lr__estimator__max_iter": 3000,
+            "lr__estimator__tol": 0.0001,
+            "tfidf__max_df": 0.95,
+            "tfidf__max_features": 20000,
+            "tfidf__min_df": 2,
+            "tfidf__ngram_range": [
+                1,
+                2
+            ],
+            "tfidf__sublinear_tf": true
+        },
+        "val_accuracy": 0.8953908241291418,
+        "val_macro_f1": 0.8854657039042308
+    },
+    {
+        "candidate": 2,
+        "params": {
+            "lr__estimator__C": 8,
+            "lr__estimator__max_iter": 3000,
+            "lr__estimator__tol": 0.0001,
+            "tfidf__max_df": 0.95,
+            "tfidf__max_features": 20000,
+            "tfidf__min_df": 2,
+            "tfidf__ngram_range": [
+                1,
+                3
+            ],
+            "tfidf__sublinear_tf": true
+        },
+        "val_accuracy": 0.8941163976210705,
+        "val_macro_f1": 0.8824165902628796
+    },
+    {
+        "candidate": 3,
+        "params": {
+            "lr__estimator__C": 8,
+            "lr__estimator__max_iter": 3000,
+            "lr__estimator__tol": 0.0001,
+            "tfidf__max_df": 0.95,
+            "tfidf__max_features": 50000,
+            "tfidf__min_df": 2,
+            "tfidf__ngram_range": [
+                1,
+                2
+            ],
+            "tfidf__sublinear_tf": true
+        },
+        "val_accuracy": 0.8959218351741717,
+        "val_macro_f1": 0.8857532533077455
+    },
+    {
+        "candidate": 4,
+        "params": {
+            "lr__estimator__C": 8,
+            "lr__estimator__max_iter": 3000,
+            "lr__estimator__tol": 0.0001,
+            "tfidf__max_df": 0.95,
+            "tfidf__max_features": 50000,
+            "tfidf__min_df": 2,
+            "tfidf__ngram_range": [
+                1,
+                3
+            ],
+            "tfidf__sublinear_tf": true
+        },
+        "val_accuracy": 0.8943288020390824,
+        "val_macro_f1": 0.8845557149121932
+    },
+    {
+        "candidate": 5,
+        "params": {
+            "lr__estimator__C": 12,
+            "lr__estimator__max_iter": 3000,
+            "lr__estimator__tol": 0.0001,
+            "tfidf__max_df": 0.95,
+            "tfidf__max_features": 20000,
+            "tfidf__min_df": 2,
+            "tfidf__ngram_range": [
+                1,
+                2
+            ],
+            "tfidf__sublinear_tf": true
+        },
+        "val_accuracy": 0.8944350042480883,
+        "val_macro_f1": 0.8855567236275442
+    },
+    {
+        "candidate": 6,
+        "params": {
+            "lr__estimator__C": 12,
+            "lr__estimator__max_iter": 3000,
+            "lr__estimator__tol": 0.0001,
+            "tfidf__max_df": 0.95,
+            "tfidf__max_features": 20000,
+            "tfidf__min_df": 2,
+            "tfidf__ngram_range": [
+                1,
+                3
+            ],
+            "tfidf__sublinear_tf": true
+        },
+        "val_accuracy": 0.8935853865760408,
+        "val_macro_f1": 0.8817411162564133
+    },
+    {
+        "candidate": 7,
+        "params": {
+            "lr__estimator__C": 12,
+            "lr__estimator__max_iter": 3000,
+            "lr__estimator__tol": 0.0001,
+            "tfidf__max_df": 0.95,
+            "tfidf__max_features": 50000,
+            "tfidf__min_df": 2,
+            "tfidf__ngram_range": [
+                1,
+                2
+            ],
+            "tfidf__sublinear_tf": true
+        },
+        "val_accuracy": 0.8956032285471538,
+        "val_macro_f1": 0.8877694407615264
+    },
+    {
+        "candidate": 8,
+        "params": {
+            "lr__estimator__C": 12,
+            "lr__estimator__max_iter": 3000,
+            "lr__estimator__tol": 0.0001,
+            "tfidf__max_df": 0.95,
+            "tfidf__max_features": 50000,
+            "tfidf__min_df": 2,
+            "tfidf__ngram_range": [
+                1,
+                3
+            ],
+            "tfidf__sublinear_tf": true
+        },
+        "val_accuracy": 0.8942225998300765,
+        "val_macro_f1": 0.8855565380948051
+    },
+    {
+        "candidate": 9,
+        "params": {
+            "lr__estimator__C": 16,
+            "lr__estimator__max_iter": 3000,
+            "lr__estimator__tol": 0.0001,
+            "tfidf__max_df": 0.95,
+            "tfidf__max_features": 20000,
+            "tfidf__min_df": 2,
+            "tfidf__ngram_range": [
+                1,
+                2
+            ],
+            "tfidf__sublinear_tf": true
+        },
+        "val_accuracy": 0.8937977909940527,
+        "val_macro_f1": 0.8862105016704375
+    },
+    {
+        "candidate": 10,
+        "params": {
+            "lr__estimator__C": 16,
+            "lr__estimator__max_iter": 3000,
+            "lr__estimator__tol": 0.0001,
+            "tfidf__max_df": 0.95,
+            "tfidf__max_features": 20000,
+            "tfidf__min_df": 2,
+            "tfidf__ngram_range": [
+                1,
+                3
+            ],
+            "tfidf__sublinear_tf": true
+        },
+        "val_accuracy": 0.892948173322005,
+        "val_macro_f1": 0.8832216574294689
+    },
+    {
+        "candidate": 11,
+        "params": {
+            "lr__estimator__C": 16,
+            "lr__estimator__max_iter": 3000,
+            "lr__estimator__tol": 0.0001,
+            "tfidf__max_df": 0.95,
+            "tfidf__max_features": 50000,
+            "tfidf__min_df": 2,
+            "tfidf__ngram_range": [
+                1,
+                2
+            ],
+            "tfidf__sublinear_tf": true
+        },
+        "val_accuracy": 0.8949660152931181,
+        "val_macro_f1": 0.8853124841140264
+    },
+    {
+        "candidate": 12,
+        "params": {
+            "lr__estimator__C": 16,
+            "lr__estimator__max_iter": 3000,
+            "lr__estimator__tol": 0.0001,
+            "tfidf__max_df": 0.95,
+            "tfidf__max_features": 50000,
+            "tfidf__min_df": 2,
+            "tfidf__ngram_range": [
+                1,
+                3
+            ],
+            "tfidf__sublinear_tf": true
+        },
+        "val_accuracy": 0.8928419711129991,
+        "val_macro_f1": 0.8847470668191064
+    }
+]

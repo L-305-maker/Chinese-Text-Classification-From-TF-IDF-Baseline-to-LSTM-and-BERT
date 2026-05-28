@@ -1,0 +1,11 @@
+{
+    "model_name": "bert_partial_last_8_embedding_fgm",
+    "temperature": 0.8109431862831116,
+    "n_bins": 10,
+    "ece_before": 0.021872151643037796,
+    "ece_after": 0.01025309320539236,
+    "nll_before": 0.24303781986236572,
+    "nll_after": 0.23213383555412292,
+    "accuracy_before": 0.9173746705055237,
+    "accuracy_after": 0.9173746705055237
+}

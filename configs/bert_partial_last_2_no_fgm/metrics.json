@@ -1,0 +1,13 @@
+{
+    "total_params": 102275338,
+    "trainable_params": 14774026,
+    "trainable_ratio": 0.1444534556316988,
+    "best_val_f1": 0.9082956640629541,
+    "train_loss": 0.27249022783638094,
+    "train_accuracy": 0.9652716142099633,
+    "train_macro_f1": 0.9648039933500103,
+    "test_loss": 0.42224095094578695,
+    "test_accuracy": 0.9076040781648258,
+    "test_macro_f1": 0.9001047020086347,
+    "saved_at": "2026-05-27T23:28:49"
+}

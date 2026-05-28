@@ -4,7 +4,8 @@ import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score, f1_score
-from sklearn.model_selection import GridSearchCV
+from sklearn.model_selection import ParameterGrid
+from sklearn.multiclass import OneVsRestClassifier
 from sklearn.pipeline import Pipeline
 
 from src.data_processor import build_id_map, data_processor
@@ -29,14 +30,22 @@ def cut_text(text):
 def build_pipeline():
     return Pipeline([
         ("tfidf", TfidfVectorizer(
-            max_features=5000,
+            max_features=20000,
             min_df=2,
-            ngram_range=(1, 2)
+            max_df=0.95,
+            ngram_range=(1, 3),
+            sublinear_tf=True,
+            token_pattern=r"(?u)\b\w+\b",
         )),
-        ("lr", LogisticRegression(
-            max_iter=10000,
-            solver="saga",
-            random_state=42
+        ("lr", OneVsRestClassifier(
+            LogisticRegression(
+                C=12,
+                max_iter=3000,
+                solver="liblinear",
+                tol=1e-4,
+                random_state=42
+            ),
+            n_jobs=1
         ))
     ])
 
@@ -44,17 +53,25 @@ def build_pipeline():
 def build_param_grid(small_grid=False):
     if small_grid:
         return {
-            "tfidf__max_features": [5000],
-            "tfidf__ngram_range": [(1, 2)],
-            "lr__C": [1],
-            "lr__max_iter": [10000],
+            "tfidf__max_features": [20000],
+            "tfidf__min_df": [2],
+            "tfidf__max_df": [0.95],
+            "tfidf__ngram_range": [(1, 3)],
+            "tfidf__sublinear_tf": [True],
+            "lr__estimator__C": [12],
+            "lr__estimator__max_iter": [3000],
+            "lr__estimator__tol": [1e-4],
         }
 
     return {
-        "tfidf__max_features": [5000, 10000],
+        "tfidf__max_features": [20000, 50000],
+        "tfidf__min_df": [2],
+        "tfidf__max_df": [0.95],
         "tfidf__ngram_range": [(1, 2), (1, 3)],
-        "lr__C": [0.01, 0.1, 1, 10, 100],
-        "lr__max_iter": [10000, 50000],
+        "tfidf__sublinear_tf": [True],
+        "lr__estimator__C": [8, 12, 16],
+        "lr__estimator__max_iter": [3000],
+        "lr__estimator__tol": [1e-4],
     }
 
 
@@ -82,11 +99,53 @@ def sample_train_data(train_data, sample_size):
     return sampled.sample(frac=1, random_state=42).reset_index(drop=True)
 
 
-def get_cv_fold_count(labels, requested_cv=5):
-    min_class_count = labels.value_counts().min()
-    if min_class_count < 2:
-        raise ValueError("Each class needs at least 2 samples for GridSearchCV.")
-    return min(requested_cv, int(min_class_count))
+def score_model(model, text, labels):
+    pred = model.predict(text)
+    return {
+        "accuracy": accuracy_score(labels, pred),
+        "macro_f1": f1_score(labels, pred, average="macro"),
+    }
+
+
+def find_best_model(train_text, train_label, val_text, val_label, small_grid=False):
+    best_params = None
+    best_metrics = None
+    search_results = []
+    param_candidates = list(ParameterGrid(build_param_grid(small_grid=small_grid)))
+
+    for candidate_idx, params in enumerate(param_candidates, start=1):
+        model = build_pipeline()
+        model.set_params(**params)
+        model.fit(train_text, train_label)
+
+        val_metrics = score_model(model, val_text, val_label)
+        result = {
+            "candidate": candidate_idx,
+            "params": params,
+            "val_accuracy": val_metrics["accuracy"],
+            "val_macro_f1": val_metrics["macro_f1"],
+        }
+        search_results.append(result)
+
+        print(
+            f"[{candidate_idx}/{len(param_candidates)}] "
+            f"val_acc={val_metrics['accuracy']:.4f}, "
+            f"val_macro_f1={val_metrics['macro_f1']:.4f}, "
+            f"params={params}"
+        )
+
+        if (
+            best_metrics is None
+            or val_metrics["macro_f1"] > best_metrics["macro_f1"]
+            or (
+                val_metrics["macro_f1"] == best_metrics["macro_f1"]
+                and val_metrics["accuracy"] > best_metrics["accuracy"]
+            )
+        ):
+            best_params = params
+            best_metrics = val_metrics
+
+    return best_params, best_metrics, search_results
 
 
 def validate_data():
@@ -114,22 +173,25 @@ def train(sample_size=None, small_grid=False):
     train_data = sample_train_data(train_data, sample_size)
 
     train_label = build_id_map(train_data["label"])
+    val_label = build_id_map(val_data["label"])
     test_label = build_id_map(test_data["label"])
-    cv = get_cv_fold_count(train_data["label"], requested_cv=5)
 
     train_text = train_data["text"].apply(cut_text)
+    val_text = val_data["text"].apply(cut_text)
     test_text = test_data["text"].apply(cut_text)
 
     config = {
         "model_name": MODEL_NAME,
         "model_type": "sklearn_pipeline",
         "vectorizer": "TfidfVectorizer",
-        "classifier": "LogisticRegression",
+        "classifier": "OneVsRestClassifier(LogisticRegression)",
+        "text_preprocessing": "jieba.lcut joined by spaces before TF-IDF",
         "train_size": len(train_data),
         "val_size": len(val_data),
         "test_size": len(test_data),
         "sample_size": sample_size,
-        "cv": cv,
+        "search_strategy": "validation_set",
+        "selection_metric": "val_macro_f1",
         "random_state": 42,
         "param_grid": build_param_grid(small_grid=small_grid),
         "note": "LR is saved as .pkl because it is not a PyTorch model.",
@@ -137,27 +199,32 @@ def train(sample_size=None, small_grid=False):
 
     _, params_dir = initialize_experiment(MODEL_NAME, config)
 
-    grid_lg = GridSearchCV(
-        build_pipeline(),
-        param_grid=build_param_grid(small_grid=small_grid),
-        cv=cv,
-        n_jobs=1,
-        verbose=1
+    best_params, best_val_metrics, search_results = find_best_model(
+        train_text,
+        train_label,
+        val_text,
+        val_label,
+        small_grid=small_grid,
     )
 
-    grid_lg.fit(train_text, train_label)
+    final_train_text = pd.concat([train_text, val_text], axis=0).reset_index(drop=True)
+    final_train_label = train_label + val_label
 
-    best_lg = grid_lg.best_estimator_
+    best_lg = build_pipeline()
+    best_lg.set_params(**best_params)
+    best_lg.fit(final_train_text, final_train_label)
     test_pred = best_lg.predict(test_text)
 
     metrics = {
         "test_accuracy": accuracy_score(test_label, test_pred),
         "test_macro_f1": f1_score(test_label, test_pred, average="macro"),
-        "best_cv_score": grid_lg.best_score_,
+        "best_val_accuracy": best_val_metrics["accuracy"],
+        "best_val_f1": best_val_metrics["macro_f1"],
     }
 
     model_path = save_sklearn_model(MODEL_NAME, best_lg, filename="model.pkl")
-    save_json(grid_lg.best_params_, params_dir / "best_params.json")
+    save_json(best_params, params_dir / "best_params.json")
+    save_json(search_results, params_dir / "validation_search_results.json")
     save_metrics(MODEL_NAME, metrics)
 
     print(f"Saved LR model to: {model_path}")

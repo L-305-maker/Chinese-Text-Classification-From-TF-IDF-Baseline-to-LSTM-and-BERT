@@ -220,43 +220,63 @@ def train_model(
     save_history(model_name, perf)
     return perf
 
+
+def build_class_weights(labels, num_classes, device, power=0.5):
+    label_tensor = torch.tensor(labels, dtype=torch.long)
+    counts = torch.bincount(label_tensor, minlength=num_classes).float().clamp_min(1.0)
+    weights = (counts.sum() / (num_classes * counts)).pow(power)
+    return weights.to(device)
+
+
 def args_bert_parse(args=None):
     parser = argparse.ArgumentParser(description="BERT model train")
-    parser.add_argument("--dropout",type=float,default=0.3)
+    parser.add_argument("--dropout",type=float,default=0.2)
     parser.add_argument("--max_len",type=int,default=256)
     parser.add_argument("--batch_size",type=int,default=16)
-    parser.add_argument("--epochs",type=int,default=5)
+    parser.add_argument("--epochs",type=int,default=6)
     parser.add_argument(
         "--unfreeze_last_n_layers",
         type=int,
-        default=None,
+        default=8,
         help="Number of last BERT layers to unfreeze when using partial fine-tuning"
     )
     parser.add_argument("--bert_lr",type=float,default=2e-5,help="Learning rate for BERT parameters")
-    parser.add_argument("--classifier_lr",type=float,default=1e-4,help="Learning rate for classifier head")
+    parser.add_argument("--classifier_lr",type=float,default=2e-4,help="Learning rate for classifier head")
     parser.add_argument("--weight_decay",type=float,default=0.01,help="Weight decay for AdamW optimizer")
-    parser.add_argument(
+    fgm_group = parser.add_mutually_exclusive_group()
+    fgm_group.add_argument(
         "--use_fgm",
         "--use-fgm",
         action="store_true",
         dest="use_fgm",
+        default=None,
         help="Use Partial-4/8 + Embedding Unfrozen + FGM experiments."
+    )
+    fgm_group.add_argument(
+        "--no_fgm",
+        "--no-fgm",
+        action="store_false",
+        dest="use_fgm",
+        help="Disable automatic FGM."
     )
     parser.add_argument(
         "--fgm_epsilon",
         "--fgm-epsilon",
         type=float,
-        default=1.0,
+        default=0.8,
         dest="fgm_epsilon",
         help="FGM perturbation scale."
     )
     parser.add_argument(
         "--finetune_strategy",
         type=str,
-        default="full",
+        default="partial",
         choices=["full","frozen","partial"],
         help="choose the bert fine-tuning strategy"
     )
+    parser.add_argument("--class_weight_power", "--class-weight-power", type=float, default=0.5)
+    parser.add_argument("--no_class_weights", "--no-class-weights", action="store_true")
+    parser.add_argument("--label_smoothing", "--label-smoothing", type=float, default=0.02)
     parser.add_argument(
         "--freeze-sweep",
         action="store_true",
@@ -330,7 +350,12 @@ def args_bert_parse(args=None):
     )
     parsed_args = parser.parse_args(args)
     if parsed_args.finetune_strategy == "partial" and parsed_args.unfreeze_last_n_layers is None:
-        parsed_args.unfreeze_last_n_layers = 2
+        parsed_args.unfreeze_last_n_layers = 8
+    if parsed_args.use_fgm is None:
+        parsed_args.use_fgm = (
+            parsed_args.finetune_strategy == "partial"
+            and parsed_args.unfreeze_last_n_layers in FGM_PARTIAL_LAYERS
+        )
     return parsed_args
 
 
@@ -428,6 +453,9 @@ def build_bert_config(args, model_name=MODEL_NAME):
         "use_fgm": args.use_fgm,
         "fgm_epsilon": args.fgm_epsilon,
         "embedding_unfrozen": embedding_unfrozen_for_fgm(args),
+        "use_class_weights": not args.no_class_weights,
+        "class_weight_power": args.class_weight_power,
+        "label_smoothing": args.label_smoothing,
         "calibrate": args.calibrate,
         "calibration_bins": args.calibration_bins,
     }
@@ -749,7 +777,20 @@ def run_bert_experiment(
 
     optimizer = build_Bert_optimizer(args,model)
     fgm = build_fgm(args, model)
-    criterion = nn.CrossEntropyLoss()
+    class_weights = None
+    if config["use_class_weights"]:
+        class_weights = build_class_weights(
+            labels=train_loader.dataset.labels,
+            num_classes=config["num_classes"],
+            device=device,
+            power=config["class_weight_power"],
+        )
+        config["class_weights"] = class_weights.detach().cpu().tolist()
+
+    criterion = nn.CrossEntropyLoss(
+        weight=class_weights,
+        label_smoothing=config["label_smoothing"],
+    )
 
     perf = train_model(
         model=model,

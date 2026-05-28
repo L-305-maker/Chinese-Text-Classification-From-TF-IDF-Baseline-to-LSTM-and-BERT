@@ -1,31 +1,52 @@
-﻿{
-    "model_name":  "lr_tfidf",
-    "model_type":  "sklearn_pipeline",
-    "vectorizer":  "TfidfVectorizer",
-    "classifier":  "LogisticRegression",
-    "train_size":  20,
-    "val_size":  5000,
-    "test_size":  10000,
-    "sample_size":  20,
-    "cv":  2,
-    "random_state":  42,
-    "param_grid":  {
-                       "tfidf__max_features":  [
-                                                   5000
-                                               ],
-                       "tfidf__ngram_range":  [
-                                                  [
-                                                      1,
-                                                      2
-                                                  ]
-                                              ],
-                       "lr__C":  [
-                                     1
-                                 ],
-                       "lr__max_iter":  [
-                                            10000
-                                        ]
-                   },
-    "note":  "LR is saved as .pkl because it is not a PyTorch model.",
-    "saved_at":  "2026-05-05T21:56:06"
+{
+    "model_name": "lr_tfidf",
+    "model_type": "sklearn_pipeline",
+    "vectorizer": "TfidfVectorizer",
+    "classifier": "OneVsRestClassifier(LogisticRegression)",
+    "text_preprocessing": "jieba.lcut joined by spaces before TF-IDF",
+    "train_size": 43941,
+    "val_size": 9416,
+    "test_size": 9416,
+    "sample_size": null,
+    "search_strategy": "validation_set",
+    "selection_metric": "val_macro_f1",
+    "random_state": 42,
+    "param_grid": {
+        "tfidf__max_features": [
+            20000,
+            50000
+        ],
+        "tfidf__min_df": [
+            2
+        ],
+        "tfidf__max_df": [
+            0.95
+        ],
+        "tfidf__ngram_range": [
+            [
+                1,
+                2
+            ],
+            [
+                1,
+                3
+            ]
+        ],
+        "tfidf__sublinear_tf": [
+            true
+        ],
+        "lr__estimator__C": [
+            8,
+            12,
+            16
+        ],
+        "lr__estimator__max_iter": [
+            3000
+        ],
+        "lr__estimator__tol": [
+            0.0001
+        ]
+    },
+    "note": "LR is saved as .pkl because it is not a PyTorch model.",
+    "saved_at": "2026-05-27T19:27:49"
 }

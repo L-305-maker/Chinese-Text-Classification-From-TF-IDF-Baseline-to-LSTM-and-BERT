@@ -1,56 +1,78 @@
-# 中文新闻文本分类实验结果对比
+# 中文电商评论十分类实验结果对比
 
-本项目使用 CNews 中文新闻数据集做文本分类实验。实验中主要比较了三类模型：`TF-IDF + Logistic Regression`、`LSTM` 和 `BERT`。在 BERT 部分，又进一步比较了不同微调策略、是否加入 FGM 对抗训练，以及温度校准前后的置信度表现。
+本项目使用 `online_shopping_10_cats` 中文电商评论数据集进行十分类实验，比较了三类文本分类模型：`TF-IDF + Logistic Regression`、`LSTM` 和 `BERT`。在 BERT 部分，进一步比较了 frozen、partial fine-tuning、full fine-tuning、FGM 对抗训练以及温度校准后的置信度表现。
 
-本 README 只保留实验结果和分析，不再放具体操作细则。详细运行步骤见 `docs/OPERATION.md`。
+当前数据集使用原始 CSV 中的 `review` 作为文本，`cat` 作为十分类标签，原始 `label` 情感列不参与本任务。数据划分为：
+
+| Split | 样本数 |
+| --- | ---: |
+| train | 43,941 |
+| val | 9,416 |
+| test | 9,416 |
+
+类别包括：`书籍`、`平板`、`手机`、`水果`、`洗发水`、`热水器`、`蒙牛`、`衣服`、`计算机`、`酒店`。
+
+完整运行说明见 `docs/OPERATION.md`，项目结构说明见 `docs/PROJECT_STRUCTURE.md`。
 
 ## 1. 不同模型结果对比
 
-首先比较三个主要模型在测试集上的表现。
+这里按验证集选择模型，再在测试集上汇报最终结果。BERT 主结果采用 `bert_partial_last_8_embedding_fgm`，这是验证集 Macro F1 最高的一组；在后面的 BERT 策略表中可以看到，若只看测试集 Macro F1，`bert_partial_last_4_embedding_fgm` 略高。
 
-| 模型 | 实验目录 | Test Accuracy | Test Macro F1 | Test Loss | 说明 |
-| --- | --- | ---: | ---: | ---: | --- |
-| TF-IDF + LR | `lr_tfidf` | 0.4676 | 0.4479 | - | 传统机器学习 baseline，效果最低 |
-| LSTM | `lstm` | 0.9483 | 0.9486 | 0.2276 | 相比 LR 提升明显 |
-| BERT | `bert_partial_last_8_no_fgm` | 0.9699 | 0.9697 | 0.1162 | 效果最好，说明预训练模型优势明显 |
+| 模型 | 实验目录 | Test Accuracy | Test Macro F1 | Test Loss | Best Val Macro F1 | 说明 |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| TF-IDF + LR | `lr_tfidf` | 0.8910 | 0.8777 | - | 0.8878 | 传统机器学习 baseline，速度快但上限较低 |
+| LSTM | `lstm` | 0.9024 | 0.8942 | 0.5768 | 0.8964 | 字符级双向 LSTM，明显优于 TF-IDF |
+| BERT | `bert_partial_last_8_embedding_fgm` | 0.9174 | 0.9155 | 0.2430 | 0.9175 | 验证集最优，加入 FGM 与类别权重 |
 
-从结果看，三个模型的效果差距比较明显：
+从结果看：
 
-- `TF-IDF + LR` 的 Macro F1 只有 `0.4479`，说明单纯依靠词频特征和线性分类器不太够，后续需要进一步检查max_features、ngram_range、类别映射与数据预处理流程。
-- `LSTM` 的 Macro F1 达到 `0.9486`，比 LR 高很多，说明深度学习模型能学到更多文本顺序和语义信息。
-- `BERT` 的 Macro F1 达到 `0.9697`，是三个模型中最好的。
+- `TF-IDF + LR` 作为 baseline 已经达到 `0.8777` Macro F1，说明电商评论中的品类词仍然有较强区分度。
+- `LSTM` 使用字符级输入、双向结构和类别权重后，Macro F1 提升到 `0.8942`，比 TF-IDF 更能处理口语化、短文本和局部上下文。
+- `BERT` 取得当前最优的验证集表现，测试 Macro F1 为 `0.9155`，相较 LSTM 继续提升约 `0.0213`。
 
-对应图表：
+相关图表：
 
 - `outputs/comparison/model_test_scores.png`
 - `outputs/comparison/model_metric_heatmap.png`
-- `outputs/comparison/model_test_loss.png`
+- `outputs/comparison/model_generalization_gap.png`
 
-![模型测试分数](outputs/comparison/model_test_scores.png)
+## 2. 主要实验参数
 
-## 2. 同一 BERT 模型的微调策略对比
+每个实验的完整参数均保存在 `configs/<experiment>/config.json`。下面列出关键设置。
 
-这里比较的是同一个 BERT 模型，在不同冻结/解冻策略下的表现。主要区别是哪些参数参与训练。
+| 模型 | 关键参数 |
+| --- | --- |
+| TF-IDF + LR | `max_features=50000`，`ngram_range=(1,2)`，`min_df=2`，`max_df=0.95`，`sublinear_tf=True`，`C=12`，`max_iter=3000` |
+| LSTM | `tokenizer=char`，`embed_dim=256`，`hidden_size=384`，`num_layers=2`，`bidirectional=True`，`pooling=last_mean`，`dropout=0.4`，`max_len=256`，`batch_size=64`，`lr=8e-4` |
+| BERT | `bert-base-chinese`，`max_len=256`，`batch_size=16`，`epochs=6`，`dropout=0.2`，`bert_lr=2e-5`，`classifier_lr=2e-4`，`weight_decay=0.01` |
+| 类别不均衡处理 | LSTM 和 BERT 均使用类别权重，`class_weight_power=0.5` |
+| 正则化 | LSTM 使用 `label_smoothing=0.03`，BERT 使用 `label_smoothing=0.02`；BERT partial last 4/8 支持 FGM |
 
-| 策略 | 实验目录 | 可训练参数比例 | Test Accuracy | Test Macro F1 | Test Loss |
+## 3. BERT 微调策略对比
+
+这一部分比较同一个 `bert-base-chinese` 模型在不同冻结/解冻策略下的表现。`trainable_ratio` 表示参与训练的参数比例。
+
+| 策略 | 实验目录 | Trainable Ratio | Test Accuracy | Test Macro F1 | Best Val Macro F1 |
 | --- | --- | ---: | ---: | ---: | ---: |
-| frozen | `bert_frozen` | 0.0075% | 0.9406 | 0.9398 | 0.1854 |
-| full | `bert_full_no_fgm` | 100.0000% | 0.9567 | 0.9564 | 0.1461 |
-| partial last 1 | `bert_partial_last_1` | 7.5152% | 0.9654 | 0.9652 | 0.1176 |
-| partial last 2 | `bert_partial_last_2` | 14.4453% | 0.9662 | 0.9658 | 0.1132 |
-| partial last 4 | `bert_partial_last_4_no_fgm` | 28.3057% | 0.9670 | 0.9667 | 0.1122 |
-| partial last 8 | `bert_partial_last_8_no_fgm` | 56.0265% | 0.9699 | 0.9697 | 0.1162 |
-| partial last 12 | `bert_partial_last_12` | 83.7472% | 0.9677 | 0.9675 | 0.1175 |
+| frozen | `bert_frozen_no_fgm` | 0.0075% | 0.8575 | 0.8335 | 0.8444 |
+| partial last 1 | `bert_partial_last_1_no_fgm` | 7.5152% | 0.9061 | 0.9027 | 0.8989 |
+| partial last 2 | `bert_partial_last_2_no_fgm` | 14.4453% | 0.9076 | 0.9001 | 0.9083 |
+| partial last 4 | `bert_partial_last_4_no_fgm` | 28.3057% | 0.9133 | 0.9107 | 0.9106 |
+| partial last 4 + FGM | `bert_partial_last_4_embedding_fgm` | 44.5585% | 0.9180 | 0.9180 | 0.9161 |
+| partial last 8 | `bert_partial_last_8_no_fgm` | 56.0265% | 0.9139 | 0.9085 | 0.9122 |
+| partial last 8 + FGM | `bert_partial_last_8_embedding_fgm` | 72.2793% | 0.9174 | 0.9155 | 0.9175 |
+| partial last 12 | `bert_partial_last_12_no_fgm` | 83.7472% | 0.9125 | 0.9051 | 0.9118 |
+| full | `bert_full_no_fgm` | 100.0000% | 0.9151 | 0.9068 | 0.9112 |
 
 可以看出：
 
-- `frozen` 只训练分类头，参数量最少，但效果也最低。
-- `full` 训练所有参数，但这次结果没有超过 partial 策略；可以说明全参数微调不一定带来最好的效果，Partial finetune_strategy能够再保留底层语义的同时，调整高层以适应高层新闻分类任务。
-- `partial last 8` 在不加 FGM 的情况下表现最好，Test Macro F1 为 `0.9697`。
-- 解冻层数不是越多越好，`last 12` 比 `last 8` 略低。
-- 解冻层数过少可能因为可训练参数过少而导致任务匹配性不足；但如果解冻层数过多可能会导致训练成本和过拟合风险过高。因此partial 8在训练参数中取得了比较好的平衡。
-- CNews 训练集约 5 万条，BERT-base 有 1.1 亿参数，参数/样本比超过 2000:1。full 微调时所有参数都在更新，模型容量远超数据能支撑的范围，导致过拟合——训练集 loss 持续下降但验证集 F1 不再提升甚至回落。partial last 8 只解冻 56% 的参数，底层预训练表示被保留，相当于隐式正则化.
-对应图表：
+- 只训练分类头的 `frozen` 明显不足，Macro F1 只有 `0.8335`。
+- 解冻少量高层后效果迅速提升，`partial last 1/2/4` 都明显优于 frozen。
+- 全参数微调没有取得最优结果，说明当前数据规模和类别不均衡下，完全放开 BERT 参数并不一定最稳。
+- `partial last 4 + FGM` 测试集 Macro F1 最高，为 `0.9180`。
+- `partial last 8 + FGM` 验证集 Macro F1 最高，为 `0.9175`，因此更适合作为按验证集选择出的主模型。
+
+相关图表：
 
 - `outputs/bert_freeze/bert_freeze_scores.png`
 - `outputs/bert_freeze/bert_freeze_trainable_params.png`
@@ -58,97 +80,76 @@
 
 ![BERT 微调策略分数](outputs/bert_freeze/bert_freeze_scores.png)
 
-## 3. 同一 BERT 模型有无 FGM 模块对比
+## 4. FGM 对抗训练对比
 
-这一部分只比较 partial last 4 和 partial last 8，因为 FGM 目前只在这两组实验中使用。
-由于标准 FGM 通常作用于 BERT 的 word embedding 层，而 Partial Fine-tuning 默认可能冻结 embedding，因此本项目中的 `embedding_fgm` 表示在对应 partial 策略下额外允许 word embedding 参与对抗扰动训练。
+FGM 只在 partial last 4 和 partial last 8 两组实验中使用。启用 FGM 时，项目额外解冻 embedding 层，使扰动可以作用到 BERT 词向量参数。
 
 | 解冻层数 | 无 FGM 实验 | 有 FGM 实验 | 无 FGM Accuracy | 有 FGM Accuracy | Accuracy 提升 | 无 FGM Macro F1 | 有 FGM Macro F1 | Macro F1 提升 |
 | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| last 4 | `bert_partial_last_4_no_fgm` | `bert_partial_last_4_embedding_fgm` | 0.9670 | 0.9703 | +0.0033 | 0.9667 | 0.9700 | +0.0033 |
-| last 8 | `bert_partial_last_8_no_fgm` | `bert_partial_last_8_embedding_fgm` | 0.9699 | 0.9717 | +0.0018 | 0.9697 | 0.9716 | +0.0019 |
+| last 4 | `bert_partial_last_4_no_fgm` | `bert_partial_last_4_embedding_fgm` | 0.9133 | 0.9180 | +0.0047 | 0.9107 | 0.9180 | +0.0073 |
+| last 8 | `bert_partial_last_8_no_fgm` | `bert_partial_last_8_embedding_fgm` | 0.9139 | 0.9174 | +0.0035 | 0.9085 | 0.9155 | +0.0070 |
 
-从表中可以看到：
+FGM 在两组实验中都带来了稳定提升，尤其是 Macro F1 的增益接近 `0.007`。同时，FGM 组的训练集 F1 低于无 FGM 组，但测试集 F1 更高，说明它起到了比较明显的正则化作用。
 
-- `last 4` 加入 FGM 后，Macro F1 从 `0.9667` 提升到 `0.9700`。
-- `last 8` 加入 FGM 后，Macro F1 从 `0.9697` 提升到 `0.9716`。
-- 两组实验中 FGM 都带来了提升，但提升幅度不算特别大。
-- `bert_partial_last_8_embedding_fgm` 是 FGM 对比中测试 Macro F1 最高的一组。
-
-对应图表：
+相关图表：
 
 - `outputs/fgm_comparison/bert_fgm_comparison.png`
 - `outputs/fgm_comparison/bert_fgm_gain.png`
 
-FGM 的收益来自强迫模型抵抗对抗扰动，当任务本身已经足够简单（baseline F1=0.97），模型不需要对边界样本做精细区分就能达到很高的准确率，对抗训练的边际收益有限.
-
 ![BERT FGM 对比](outputs/fgm_comparison/bert_fgm_comparison.png)
 
-## 4. 置信度与温度校准展示
+## 5. 置信度与温度校准
 
-置信度展示使用的是实验 `bert_partial_last_4_embedding_fgm`。这里比较校准前和校准后的模型置信度情况。
-Temperature Scaling 的目标不是提升分类准确率，而是改善 softmax 概率的可靠性。因此 Accuracy 和 Macro F1 基本不变是正常现象，重点应观察 ECE 和 NLL 是否下降。
+温度校准使用 `bert_partial_last_8_embedding_fgm`。Temperature Scaling 不改变预测类别，因此 Accuracy 基本不变；它主要改善 softmax 概率的可靠性。
 
 | 指标 | 校准前 | 校准后 | 变化 |
 | --- | ---: | ---: | ---: |
-| Accuracy | 0.9703 | 0.9703 | 0.0000 |
-| NLL | 0.1013 | 0.0957 | -0.0057 |
-| ECE | 0.0127 | 0.0081 | -0.0046 |
-| Temperature | - | 1.1642 | - |
+| Accuracy | 0.9174 | 0.9174 | 0.0000 |
+| NLL | 0.2430 | 0.2321 | -0.0109 |
+| ECE | 0.0219 | 0.0103 | -0.0116 |
+| Temperature | - | 0.8109 | - |
 
 说明：
 
-- 温度校准不会改变预测类别，所以 Accuracy 没有变化。
-- NLL 从 `0.1013` 降到 `0.0957`，说明概率分布更合理。
-- ECE 从 `0.0127` 降到 `0.0081`，说明置信度和真实准确率更接近。
-- temperature 为 `1.1642`，表示模型原来的 logits 被适当缩放，预测置信度变得没有那么尖锐。
+- NLL 从 `0.2430` 降到 `0.2321`，概率分布更适合真实标签。
+- ECE 从 `0.0219` 降到 `0.0103`，置信度和真实准确率更接近。
+- 最高置信度区间 `0.90-1.00` 的 gap 从 `0.0213` 降到约 `0.0008`，高置信预测的校准效果非常明显。
 
 校准图：
 
-![可靠性图](outputs/calibration/bert_partial_last_4_embedding_fgm_reliability_diagram.png)
+![可靠性图](outputs/calibration/bert_partial_last_8_embedding_fgm_reliability_diagram.png)
 
-## 5. 置信度分箱结果
-
-下面展示 `bert_partial_last_4_embedding_fgm` 在测试集上的置信度分箱。这里选取非空分箱，主要看每个置信度区间里的平均置信度和实际准确率是否接近。
-
-### 校准前
-
-| 置信度区间 | 样本数 | 实际准确率 | 平均置信度 | 差距 |
-| --- | ---: | ---: | ---: | ---: |
-| 0.20-0.30 | 3 | 0.6667 | 0.2836 | 0.3831 |
-| 0.30-0.40 | 12 | 0.1667 | 0.3527 | 0.1861 |
-| 0.40-0.50 | 30 | 0.3667 | 0.4571 | 0.0905 |
-| 0.50-0.60 | 90 | 0.4889 | 0.5519 | 0.0630 |
-| 0.60-0.70 | 82 | 0.5488 | 0.6522 | 0.1035 |
-| 0.70-0.80 | 94 | 0.6383 | 0.7535 | 0.1152 |
-| 0.80-0.90 | 160 | 0.7063 | 0.8557 | 0.1495 |
-| 0.90-1.00 | 9529 | 0.9892 | 0.9968 | 0.0076 |
-
-### 校准后
-
-| 置信度区间 | 样本数 | 实际准确率 | 平均置信度 | 差距 |
-| --- | ---: | ---: | ---: | ---: |
-| 0.20-0.30 | 6 | 0.5000 | 0.2767 | 0.2233 |
-| 0.30-0.40 | 15 | 0.2000 | 0.3567 | 0.1567 |
-| 0.40-0.50 | 44 | 0.4091 | 0.4601 | 0.0510 |
-| 0.50-0.60 | 95 | 0.5158 | 0.5496 | 0.0338 |
-| 0.60-0.70 | 92 | 0.5652 | 0.6461 | 0.0808 |
-| 0.70-0.80 | 124 | 0.6935 | 0.7515 | 0.0579 |
-| 0.80-0.90 | 186 | 0.7366 | 0.8547 | 0.1181 |
-| 0.90-1.00 | 9438 | 0.9912 | 0.9949 | 0.0037 |
-
-可以看到，高置信度区间 `0.90-1.00` 的样本最多。校准前平均置信度是 `0.9968`，实际准确率是 `0.9892`；校准后平均置信度变成 `0.9949`，实际准确率是 `0.9912`，二者更接近。
-
-## 6. 总结
+## 6. 结果总结
 
 综合来看：
 
-- 不同模型之间，BERT 效果最好，LSTM 次之，TF-IDF + LR 最低。
-- 同一个 BERT 模型中，partial fine-tuning 比 frozen 更好，其中 `partial last 8` 表现比较稳定。
-- 加入 FGM 后，partial last 4 和 partial last 8 都有小幅提升。
-- 温度校准不提升分类准确率，但能改善模型置信度，让预测概率更可信。
+- 当前任务比原新闻分类更不均衡，小类如 `热水器`、`蒙牛`、`手机` 对 Macro F1 影响更明显，因此类别权重是必要设置。
+- `TF-IDF + LR` 训练速度快，作为 baseline 很合适，但在短评论、口语表达和跨品类混淆上表现有限。
+- `LSTM` 在字符级输入下表现更稳定，说明电商评论中的错别字、短词和品牌词对词级分词有一定挑战。
+- BERT 仍然是最强模型，其中 partial fine-tuning 比 frozen 明显更好，也比 full fine-tuning 更稳。
+- FGM 对测试集表现有稳定正收益，推荐在最终 BERT 模型中保留。
+- 如果按验证集选择模型，推荐 `bert_partial_last_8_embedding_fgm`；如果只追求本次测试集最高 Macro F1，`bert_partial_last_4_embedding_fgm` 是最高的一组。
 
-## 7. 补充
+## 7. 产物位置
 
-- 具体项目结构存储在`docs/`下的`PROJECT_STRUCTURE.md`文件里
-- 操作细则以及各项运行细节存储在`docs/`下的`OPERATION.md`文件里
+| 内容 | 路径 |
+| --- | --- |
+| 处理后数据 | `data/processed/train_data.csv`、`data/processed/val_data.csv`、`data/processed/test_data.csv` |
+| 每个实验参数 | `configs/<experiment>/config.json` |
+| 每个实验指标 | `configs/<experiment>/metrics.json` |
+| BERT freeze sweep 汇总 | `outputs/bert_freeze/bert_freeze_summary.csv` |
+| FGM 对比汇总 | `outputs/fgm_comparison/bert_fgm_comparison.csv` |
+| 模型总览表 | `outputs/comparison/model_metrics_summary.csv` |
+| 温度校准指标 | `outputs/calibration/bert_partial_last_8_embedding_fgm_calibration_metrics.json` |
+
+如需完全复现实验，可按下面顺序运行：
+
+```powershell
+python main.py --mode data_processor
+python main.py --mode LR --check-data
+python main.py --mode LR
+python main.py --mode LSTM
+python main.py --mode BERT --freeze-sweep
+python main.py --mode BERT --eval-only --experiment-name bert_partial_last_8_embedding_fgm --calibrate
+python main.py --mode visualize --task both
+```

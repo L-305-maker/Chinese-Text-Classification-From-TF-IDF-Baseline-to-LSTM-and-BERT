@@ -2,12 +2,12 @@
     "total_params": 102275338,
     "trainable_params": 57301258,
     "trainable_ratio": 0.5602646651727516,
-    "best_val_f1": 0.978808478151743,
-    "train_loss": 0.021546981536811217,
-    "train_accuracy": 0.99346,
-    "train_macro_f1": 0.9934627098743156,
-    "test_loss": 0.11621799422103213,
-    "test_accuracy": 0.9699,
-    "test_macro_f1": 0.969657104755872,
-    "saved_at": "2026-05-13T20:09:49"
+    "best_val_f1": 0.9122350242621243,
+    "train_loss": 0.21346186005602016,
+    "train_accuracy": 0.986049475432967,
+    "train_macro_f1": 0.9846430046698884,
+    "test_loss": 0.45017215363940855,
+    "test_accuracy": 0.9138700084961767,
+    "test_macro_f1": 0.9084773071743484,
+    "saved_at": "2026-05-28T05:01:14"
 }

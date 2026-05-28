@@ -17,16 +17,16 @@ except ImportError:  # pragma: no cover - numpy is optional for JSON conversion.
 MODELS_DIR = PROJECT_ROOT / "models"
 
 LABEL2ID = {
-    "体育": 0,
-    "财经": 1,
-    "娱乐": 2,
-    "家居": 3,
-    "房产": 4,
-    "教育": 5,
-    "时尚": 6,
-    "时政": 7,
-    "游戏": 8,
-    "科技": 9,
+    "书籍": 0,
+    "平板": 1,
+    "手机": 2,
+    "水果": 3,
+    "洗发水": 4,
+    "热水器": 5,
+    "蒙牛": 6,
+    "衣服": 7,
+    "计算机": 8,
+    "酒店": 9,
 }
 
 ID2LABEL = {idx: label for label, idx in LABEL2ID.items()}

@@ -90,7 +90,7 @@ LR、LSTM 和 BERT 都通过 `src.data_processor.build_id_map()` 使用同一套
 | `src/dataset_bert.py` | BERT tokenizer、Dataset 和 DataLoader |
 | `src/train_lr.py` | TF-IDF + Logistic Regression 训练、验证集调参和保存 |
 | `src/train_lstm.py` | LSTM 训练、验证、测试和实验产物保存 |
-| `src/train_bert.py` | BERT full/frozen/partial、FGM、eval-only、校准和 sweep 调度 |
+| `src/train_bert.py` | BERT full/frozen/partial、embedding-only 对照、FGM、eval-only、校准和 sweep 调度 |
 | `src/model_utils.py` | 标签映射、实验初始化、配置/指标/checkpoint 保存、optimizer 构造 |
 | `src/training_utils.py` | epoch 级 loss、accuracy、macro F1 统计 |
 | `src/evaluate.py` | 分类报告、混淆矩阵、预测结果和错误样本输出 |

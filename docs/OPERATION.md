@@ -20,7 +20,7 @@ python main.py --mode <任务名> [任务参数]
 | `LR` | `src.train_lr.main()` | 训练或检查 `TF-IDF + Logistic Regression` |
 | `Log_TF_IDF` | `src.train_lr.main()` | `LR` 的别名 |
 | `LSTM` | `src.train_lstm.main()` | 训练 LSTM 文本分类模型 |
-| `BERT` | `src.train_bert.main()` | 训练、评估 BERT，支持 freeze sweep、FGM、校准 |
+| `BERT` | `src.train_bert.main()` | 训练、评估 BERT，支持 freeze sweep、embedding-only 对照、FGM、校准 |
 | `visualize` | `src.visualize.main()` | 根据已有实验产物生成对比图表 |
 
 查看帮助：
@@ -206,7 +206,11 @@ python main.py --mode BERT --finetune_strategy full
 python main.py --mode BERT --finetune_strategy frozen
 python main.py --mode BERT --finetune_strategy partial --unfreeze_last_n_layers 4
 python main.py --mode BERT --finetune_strategy partial --unfreeze_last_n_layers 8
+python main.py --mode BERT --finetune_strategy partial --unfreeze_last_n_layers 4 --no-fgm --unfreeze-embeddings
+python main.py --mode BERT --finetune_strategy partial --unfreeze_last_n_layers 8 --no-fgm --unfreeze-embeddings
 ```
+
+`--unfreeze-embeddings` 用于在 partial last 4/8 的基础上额外解冻 BERT embedding 层。若要做“只额外解冻 embedding、不启用 FGM”的对照实验，需要同时加上 `--no-fgm`；对应实验名会保存为 `bert_partial_last_4_embedding_no_fgm` 或 `bert_partial_last_8_embedding_no_fgm`。
 
 当前 BERT 默认参数偏向性能优先：`finetune_strategy=partial`、`unfreeze_last_n_layers=8`、`dropout=0.2`、`epochs=6`、`bert_lr=2e-5`、`classifier_lr=2e-4`、`fgm_epsilon=0.8`、`label_smoothing=0.02`。当策略为 partial last 4/8 时，默认自动启用 FGM；可用 `--no-fgm` 关闭。
 
@@ -226,7 +230,7 @@ python main.py --mode BERT --freeze-sweep
 python main.py --mode BERT --freeze-sweep --no-fgm
 ```
 
-默认 sweep 会包含 partial last 4/8 的 FGM 版本；如果只想比较无 FGM 策略，使用 `--no-fgm`。
+默认 sweep 会包含 partial last 4/8 的 embedding-only 对照和 FGM 版本；使用 `--no-fgm` 时会跳过 FGM，但仍保留 partial last 4/8 的 embedding-only 无 FGM 对照。
 
 仅评估已有 checkpoint：
 

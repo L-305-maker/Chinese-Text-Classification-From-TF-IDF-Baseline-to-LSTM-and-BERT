@@ -431,6 +431,8 @@ def freeze_strategy_label(row):
         fgm_label = "embedding_fgm"
     elif freeze_row_uses_fgm(row):
         fgm_label = "fgm"
+    elif freeze_row_embedding_unfrozen(row):
+        fgm_label = "embedding_no_fgm"
     else:
         fgm_label = "no_fgm"
     return f"{base_label} {fgm_label}"
@@ -742,9 +744,7 @@ def _choose_fgm_variant(group, use_fgm):
     if use_fgm:
         variants["variant_rank"] = variants["embedding_unfrozen_bool"].map({True: 0, False: 1})
     else:
-        variants["variant_rank"] = variants["run_name"].astype(str).str.endswith("_no_fgm").map(
-            {True: 0, False: 1}
-        )
+        variants["variant_rank"] = variants["embedding_unfrozen_bool"].map({False: 0, True: 1})
 
     return variants.sort_values(["variant_rank", "run_name"]).iloc[0]
 

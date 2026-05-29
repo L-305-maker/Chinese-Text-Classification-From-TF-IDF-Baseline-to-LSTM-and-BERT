@@ -42,6 +42,7 @@ except ModuleNotFoundError:
 MODEL_NAME = "bert"
 DEFAULT_PARTIAL_UNFREEZE_LAYERS = [1, 2, 4, 8, 12]
 FGM_PARTIAL_LAYERS = {4, 8}
+EMBEDDING_PARTIAL_LAYERS = {4, 8}
 
 
 def train_one_epoch(model, loader, optimizer, criterion, device, fgm=None):
@@ -268,6 +269,13 @@ def args_bert_parse(args=None):
         help="FGM perturbation scale."
     )
     parser.add_argument(
+        "--unfreeze_embeddings",
+        "--unfreeze-embeddings",
+        action="store_true",
+        dest="unfreeze_embeddings",
+        help="Extra unfreeze BERT embeddings for partial last 4/8 without requiring FGM."
+    )
+    parser.add_argument(
         "--finetune_strategy",
         type=str,
         default="partial",
@@ -366,8 +374,19 @@ def fgm_is_supported(args):
     )
 
 
+def embedding_unfreeze_is_supported(args):
+    return (
+        args.finetune_strategy == "partial"
+        and args.unfreeze_last_n_layers in EMBEDDING_PARTIAL_LAYERS
+    )
+
+
 def embedding_unfrozen_for_fgm(args):
     return args.use_fgm and fgm_is_supported(args)
+
+
+def embedding_unfrozen(args):
+    return bool(getattr(args, "unfreeze_embeddings", False)) or embedding_unfrozen_for_fgm(args)
 
 
 def unfreeze_bert_embeddings(model):
@@ -390,8 +409,24 @@ def validate_fgm_args(args):
         )
 
 
+def validate_embedding_unfreeze_args(args):
+    if getattr(args, "unfreeze_embeddings", False) and not embedding_unfreeze_is_supported(args):
+        allowed = ", ".join(str(layer) for layer in sorted(EMBEDDING_PARTIAL_LAYERS))
+        raise ValueError(
+            "Extra embedding unfreeze is only supported for partial fine-tuning with "
+            f"unfreeze_last_n_layers in {{{allowed}}}."
+        )
+
+
+def validate_bert_args(args):
+    validate_fgm_args(args)
+    validate_embedding_unfreeze_args(args)
+
+
 def fgm_suffix(args):
-    return "embedding_fgm" if args.use_fgm else "no_fgm"
+    if args.use_fgm:
+        return "embedding_fgm" if embedding_unfrozen(args) else "fgm"
+    return "embedding_no_fgm" if embedding_unfrozen(args) else "no_fgm"
 
 
 def build_fgm(args, model):
@@ -414,9 +449,9 @@ def build_Bert_model(args,num_classes,device):
         unfreeze_last_n_layers=args.unfreeze_last_n_layers
     ).to(device)
 
-    if embedding_unfrozen_for_fgm(args):
+    if embedding_unfrozen(args):
         unfreeze_bert_embeddings(model)
-        print("Embedding unfrozen for Partial-4/8 + FGM experiment.")
+        print("Embedding unfrozen for Partial-4/8 experiment.")
 
     param_info = print_trainable_parameters(model)
 
@@ -452,7 +487,8 @@ def build_bert_config(args, model_name=MODEL_NAME):
         "unfreeze_last_n_layers":args.unfreeze_last_n_layers,
         "use_fgm": args.use_fgm,
         "fgm_epsilon": args.fgm_epsilon,
-        "embedding_unfrozen": embedding_unfrozen_for_fgm(args),
+        "unfreeze_embeddings": args.unfreeze_embeddings,
+        "embedding_unfrozen": embedding_unfrozen(args),
         "use_class_weights": not args.no_class_weights,
         "class_weight_power": args.class_weight_power,
         "label_smoothing": args.label_smoothing,
@@ -487,20 +523,23 @@ def freeze_sweep_specs(partial_unfreeze_layers, include_fgm=False):
     if include_fgm:
         layers.update(FGM_PARTIAL_LAYERS)
 
-    specs = [("frozen", None, False)]
+    specs = [("frozen", None, False, False)]
     for layer in sorted(layers):
-        specs.append(("partial", layer, False))
+        specs.append(("partial", layer, False, False))
+        if layer in EMBEDDING_PARTIAL_LAYERS:
+            specs.append(("partial", layer, False, True))
         if include_fgm and layer in FGM_PARTIAL_LAYERS:
-            specs.append(("partial", layer, True))
-    specs.append(("full", None, False))
+            specs.append(("partial", layer, True, False))
+    specs.append(("full", None, False, False))
     return specs
 
 
-def clone_args_for_strategy(args, finetune_strategy, unfreeze_last_n_layers, use_fgm):
+def clone_args_for_strategy(args, finetune_strategy, unfreeze_last_n_layers, use_fgm, unfreeze_embeddings=False):
     run_args = argparse.Namespace(**vars(args))
     run_args.finetune_strategy = finetune_strategy
     run_args.unfreeze_last_n_layers = unfreeze_last_n_layers
     run_args.use_fgm = use_fgm
+    run_args.unfreeze_embeddings = unfreeze_embeddings
     run_args.experiment_name = None
     return run_args
 
@@ -623,7 +662,8 @@ def build_freeze_summary_row(
         "unfreeze_last_n_layers": args.unfreeze_last_n_layers,
         "use_fgm": args.use_fgm,
         "fgm_epsilon": args.fgm_epsilon,
-        "embedding_unfrozen": embedding_unfrozen_for_fgm(args),
+        "unfreeze_embeddings": args.unfreeze_embeddings,
+        "embedding_unfrozen": embedding_unfrozen(args),
         "trainable_ratio": param_info["trainable_ratio"],
         "trainable_ratio_percent": param_info["trainable_ratio"] * 100,
         "trainable_params": param_info["trainable_params"],
@@ -671,6 +711,7 @@ def args_with_config_defaults(args, config):
         "unfreeze_last_n_layers",
         "use_fgm",
         "fgm_epsilon",
+        "unfreeze_embeddings",
     ]:
         if key in config:
             values[key] = config[key]
@@ -679,6 +720,11 @@ def args_with_config_defaults(args, config):
         values["use_fgm"] = False
     if "fgm_epsilon" not in values or values["fgm_epsilon"] is None:
         values["fgm_epsilon"] = 1.0
+    if "unfreeze_embeddings" not in values or values["unfreeze_embeddings"] is None:
+        values["unfreeze_embeddings"] = (
+            bool(config.get("embedding_unfrozen", False))
+            and not bool(values.get("use_fgm", False))
+        )
     if values.get("finetune_strategy") == "partial" and values.get("unfreeze_last_n_layers") is None:
         values["unfreeze_last_n_layers"] = 2
 
@@ -693,7 +739,7 @@ def evaluate_saved_bert_experiment(args):
 
     config = load_experiment_config(experiment_name)
     eval_args = args_with_config_defaults(args, config)
-    validate_fgm_args(eval_args)
+    validate_bert_args(eval_args)
 
     _, val_loader, test_loader, tokenizer = process_loader_bert(
         model_name=config.get("pretrained_model", "bert-base-chinese"),
@@ -766,6 +812,7 @@ def run_bert_experiment(
     save_detail_outputs=False,
     output_dir=None,
 ):
+    validate_bert_args(args)
     config = build_bert_config(args, model_name=model_name)
 
     tokenizer_dir = model_dir(model_name) / "tokenizer"
@@ -900,7 +947,7 @@ def run_freeze_sweep(args):
     output_dir.mkdir(parents=True, exist_ok=True)
 
     rows = []
-    for finetune_strategy, unfreeze_last_n_layers, use_fgm in freeze_sweep_specs(
+    for finetune_strategy, unfreeze_last_n_layers, use_fgm, unfreeze_embeddings in freeze_sweep_specs(
         args.partial_unfreeze_layers,
         include_fgm=args.use_fgm,
     ):
@@ -909,6 +956,7 @@ def run_freeze_sweep(args):
             finetune_strategy=finetune_strategy,
             unfreeze_last_n_layers=unfreeze_last_n_layers,
             use_fgm=use_fgm,
+            unfreeze_embeddings=unfreeze_embeddings,
         )
         run_name = build_experiment_name(run_args)
 
@@ -957,7 +1005,7 @@ def main(args=None):
     if args.freeze_sweep:
         return run_freeze_sweep(args)
 
-    validate_fgm_args(args)
+    validate_bert_args(args)
     config = build_bert_config(args)
 
     train_loader, val_loader, test_loader, tokenizer = process_loader_bert(
